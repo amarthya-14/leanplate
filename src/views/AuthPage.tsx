@@ -2,17 +2,17 @@ import { ArrowRight, Cloud, Eye, EyeOff, Lock, MailCheck, Smartphone } from 'luc
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { EASE, SplitWords } from '../components/motion'
-import { ParticleField, type Scene } from '../components/ParticleField'
+import { GoogleButton } from '../components/GoogleButton'
+import { PlateOrb } from '../components/PlateOrb'
 import { cx, Spinner } from '../components/ui'
 import { googleEnabled } from '../lib/supabase'
-import { resetPassword, setLocalMode, signIn, signInWithGoogle, signUp } from '../lib/sync'
+import { resetPassword, setLocalMode, signIn, signUp } from '../lib/sync'
 
-const SCENES: Scene[] = [{ kind: 'plate' }, { kind: 'text', text: '−12 kg' }, { kind: 'galaxy' }, { kind: 'text', text: 'Leanplate' }]
 const CAPTIONS = [
   { eyebrow: 'The plate method', title: 'Half sabzi. A quarter protein. A quarter carbs.', body: 'Built from whatever your mess is serving today.' },
-  { eyebrow: 'Steady, not crash', title: 'What half a kilo a week looks like.', body: 'Twenty-four weeks of the right plate — no starving, no supplements.' },
-  { eyebrow: 'Every meal, planned', title: 'Thirty-one days of menu, sorted.', body: 'Four meals a day, portioned to the piece and the katori.' },
-  { eyebrow: 'Yours, everywhere', title: 'Your mess, working for you.', body: 'Sign in once. Your plate, streaks and progress follow you to every device.' },
+  { eyebrow: 'Every meal, planned', title: 'Your mess menu, portioned to the piece.', body: 'Thirty-one days, four meals a day — what to take, and what to leave.' },
+  { eyebrow: 'Steady, not crash', title: 'Half a kilo a week. No starving.', body: 'A calm, sustainable deficit from food you already eat.' },
+  { eyebrow: 'Yours, everywhere', title: 'One account. Every device.', body: 'Your plate, streaks and progress follow you — privately.' },
 ]
 
 type Mode = 'signin' | 'signup' | 'reset' | 'confirm' | 'resetSent'
@@ -20,7 +20,7 @@ type Mode = 'signin' | 'signup' | 'reset' | 'confirm' | 'resetSent'
 export function AuthPage({ onLocal }: { onLocal: () => void }) {
   const [scene, setScene] = useState(0)
   useEffect(() => {
-    const id = setInterval(() => setScene((s) => (s + 1) % SCENES.length), 5200)
+    const id = setInterval(() => setScene((s) => (s + 1) % CAPTIONS.length), 5600)
     return () => clearInterval(id)
   }, [])
 
@@ -37,8 +37,8 @@ export function AuthPage({ onLocal }: { onLocal: () => void }) {
             'radial-gradient(90% 70% at 85% 10%, rgb(214 173 98 / 0.22), transparent 60%), radial-gradient(80% 60% at 10% 100%, rgb(159 203 173 / 0.14), transparent 60%), linear-gradient(165deg, #1b3426 0%, #0f1c15 55%, #0b140f 100%)',
         }}
       >
-        <ParticleField scenes={SCENES} index={scene} className="absolute inset-0 h-full w-full" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_45%,transparent_55%,rgb(0_0_0/0.45))]" />
+        <PlateOrb pulse={scene} className="absolute inset-0 h-full w-full" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
 
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between p-5 sm:p-7">
           <div className="flex items-center gap-2.5 text-[#efe7d4]">
@@ -48,7 +48,9 @@ export function AuthPage({ onLocal }: { onLocal: () => void }) {
             </svg>
             <span className="display text-[25px]">Leanplate</span>
           </div>
-          <span className="hidden text-[11px] tracking-[0.18em] text-[#efe7d4]/50 uppercase sm:block">Move your cursor</span>
+          <span className="hidden items-center gap-2 text-[11px] tracking-[0.18em] text-[#efe7d4]/55 uppercase sm:flex">
+            <span className="size-1.5 animate-pulse rounded-full bg-[#d6ad62]" /> Live
+          </span>
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 p-5 sm:p-8 lg:p-10">
@@ -67,10 +69,10 @@ export function AuthPage({ onLocal }: { onLocal: () => void }) {
             </motion.div>
           </AnimatePresence>
           <div className="mt-5 flex gap-1.5">
-            {SCENES.map((_, i) => (
+            {CAPTIONS.map((_, i) => (
               <div key={i} className="h-[2px] w-8 overflow-hidden rounded-full bg-white/15">
                 {i === scene && (
-                  <motion.div key={scene} className="h-full bg-[#d6ad62]" initial={{ width: '0%' }} animate={{ width: '100%' }} transition={{ duration: 5.2, ease: 'linear' }} />
+                  <motion.div key={scene} className="h-full bg-[#d6ad62]" initial={{ width: '0%' }} animate={{ width: '100%' }} transition={{ duration: 5.6, ease: 'linear' }} />
                 )}
                 {i < scene && <div className="h-full w-full bg-[#efe7d4]/40" />}
               </div>
@@ -96,6 +98,7 @@ function AuthCard({ onLocal }: { onLocal: () => void }) {
   const [busy, setBusy] = useState<'' | 'email' | 'google'>('')
   const [err, setErr] = useState('')
   const [shake, setShake] = useState(0)
+  const [showEmail, setShowEmail] = useState(!googleEnabled)
 
   const fail = (e: unknown) => {
     setErr(e instanceof Error ? e.message : String(e))
@@ -120,17 +123,6 @@ function AuthCard({ onLocal }: { onLocal: () => void }) {
     } catch (e) {
       fail(e)
     } finally {
-      setBusy('')
-    }
-  }
-
-  async function google() {
-    setErr('')
-    setBusy('google')
-    try {
-      await signInWithGoogle()
-    } catch (e) {
-      fail(e)
       setBusy('')
     }
   }
@@ -176,8 +168,27 @@ function AuthCard({ onLocal }: { onLocal: () => void }) {
         <SplitWords key={heading.title} text={heading.title} stagger={0.05} />
       </h1>
 
+      {googleEnabled && mode !== 'reset' && (
+        <div className="mt-8">
+          <GoogleButton onError={fail} onBusy={(b) => setBusy(b ? 'google' : '')} />
+          <p className="mt-3 text-center text-[12.5px] text-ink-3">One tap. No password to remember.</p>
+          {!showEmail && (
+            <button
+              type="button"
+              onClick={() => setShowEmail(true)}
+              className="mt-6 flex w-full cursor-pointer items-center gap-3 text-[12px] tracking-[0.14em] text-ink-3 uppercase transition hover:text-ink-2"
+            >
+              <span className="h-px flex-1 bg-line" /> Use email instead <span className="h-px flex-1 bg-line" />
+            </button>
+          )}
+        </div>
+      )}
+
+      <AnimatePresence initial={false}>
+      {showEmail && (
+      <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.4, ease: EASE }} className="overflow-hidden px-1 -mx-1">
       {mode !== 'reset' && (
-        <div className="relative mt-7 grid grid-cols-2 rounded-full bg-surface-2 p-1">
+        <div className={cx('relative grid grid-cols-2 rounded-full bg-surface-2 p-1', googleEnabled ? 'mt-6' : 'mt-7')}>
           {(['signin', 'signup'] as const).map((m) => (
             <button
               key={m}
@@ -195,26 +206,9 @@ function AuthCard({ onLocal }: { onLocal: () => void }) {
         </div>
       )}
 
-      {googleEnabled && mode !== 'reset' && (
-        <>
-          <button
-            type="button"
-            onClick={google}
-            disabled={!!busy}
-            className="mt-5 flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-line-strong bg-surface text-[14.5px] font-medium transition hover:-translate-y-px hover:shadow-card active:scale-[0.99] disabled:opacity-50"
-          >
-            {busy === 'google' ? <Spinner size={16} /> : <GoogleMark />}
-            Continue with Google
-          </button>
-          <div className="my-5 flex items-center gap-3 text-[11.5px] tracking-[0.14em] text-ink-3 uppercase">
-            <span className="h-px flex-1 bg-line" /> or with email <span className="h-px flex-1 bg-line" />
-          </div>
-        </>
-      )}
-
       <motion.form
         onSubmit={submit}
-        className={cx('space-y-3', !googleEnabled && 'mt-6')}
+        className="mt-4 space-y-3 pb-1"
         animate={shake ? { x: [0, -9, 8, -6, 4, 0] } : {}}
         key={shake}
         transition={{ duration: 0.45 }}
@@ -275,6 +269,9 @@ function AuthCard({ onLocal }: { onLocal: () => void }) {
           </button>
         )}
       </div>
+      </motion.div>
+      )}
+      </AnimatePresence>
 
       <div className="mt-8 border-t border-line pt-6">
         <button
@@ -355,16 +352,5 @@ function Field({
       </label>
       {trailing && <div className="absolute top-1/2 right-3 -translate-y-1/2">{trailing}</div>}
     </div>
-  )
-}
-
-function GoogleMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-    </svg>
   )
 }

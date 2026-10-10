@@ -7,4 +7,6 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 export const supabase: SupabaseClient | null = url && key ? createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }) : null
 
 export const cloudEnabled = !!supabase
-export const googleEnabled = cloudEnabled && import.meta.env.VITE_AUTH_GOOGLE === 'true'
+/** Google Identity Services client ID (one-tap / button → ID token, no redirects). */
+export const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? ''
+export const googleEnabled = cloudEnabled && (!!googleClientId || import.meta.env.VITE_AUTH_GOOGLE === 'true')

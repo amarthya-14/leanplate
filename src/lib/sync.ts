@@ -319,6 +319,21 @@ export async function signIn(email: string, password: string) {
 
 export async function signUp(email: string, password: string): Promise<'signedIn' | 'confirm'> {
   if (!supabase) throw new Error('Cloud sync is not configured.')
+  // Preferred: server creates a pre-confirmed account, then we sign straight in
+  try {
+    const r = await fetch('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+    if (r.ok) {
+      await signIn(email, password)
+      return 'signedIn'
+    }
+    if (r.status !== 404 && r.status !== 405) {
+      const j = await r.json().catch(() => ({}))
+      throw new Error(friendly(j.error ?? 'Could not create the account.'))
+    }
+  } catch (e) {
+    if (e instanceof Error && !/fetch|network|JSON|Unexpected/i.test(e.message)) throw e
+  }
+  // Fallback (local dev without serverless functions): regular sign-up
   const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
   if (error) throw new Error(friendly(error.message))
   if (data.user && data.user.identities?.length === 0) throw new Error(friendly('already registered'))
@@ -329,6 +344,13 @@ export async function signInWithGoogle() {
   if (!supabase) throw new Error('Cloud sync is not configured.')
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
   if (error) throw new Error(friendly(error.message))
+}
+
+/** Finish Google sign-in with the ID token from Google Identity Services. */
+export async function signInWithGoogleToken(token: string, nonce: string) {
+  if (!supabase) throw new Error('Cloud sync is not configured.')
+  const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token, nonce })
+  if (error) throw new Error(/provider is not enabled|Unsupported provider/i.test(error.message) ? 'Google sign-in isn’t switched on in Supabase yet.' : friendly(error.message))
 }
 
 export async function resetPassword(email: string) {

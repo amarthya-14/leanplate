@@ -107,7 +107,7 @@ function Steps() {
                   placeholder="Your first name"
                   onKeyDown={(e) => e.key === 'Enter' && go(1)}
                 />
-                <P>Just for greetings. Nothing leaves your device.</P>
+                <P>Just so the app can greet you properly.</P>
               </>
             )}
 
