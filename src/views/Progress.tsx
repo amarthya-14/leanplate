@@ -1,6 +1,9 @@
-import { Trash2 } from 'lucide-react'
+import { Sparkles, Trash2 } from 'lucide-react'
+import { Markdown } from '../components/Markdown'
+import { CountUp, Reveal } from '../components/motion'
+import { generate, profileBrief } from '../lib/gemini'
 import { useMemo, useState } from 'react'
-import { Bar, Button, Card, IconButton, NumberField, PageHeader } from '../components/ui'
+import { Bar, Button, Card, IconButton, NumberField, PageHeader, Spinner } from '../components/ui'
 import { addDays, daysBetween, fmtShort, fromISO, todayISO } from '../lib/date'
 import { bmi, bmiBand } from '../lib/nutrition'
 import { currentKg, useStore, useTargets } from '../lib/store'
@@ -47,7 +50,7 @@ export function Progress() {
   const avg = loggedDays.length ? Math.round(loggedDays.reduce((s, x) => s + x.kcal, 0) / loggedDays.length) : 0
 
   return (
-    <div className="rise">
+    <div className="">
       <PageHeader eyebrow="Progress" title="The long game" />
 
       <div className="mb-3 grid gap-3 md:grid-cols-[1.4fr_1fr]">
@@ -97,6 +100,8 @@ export function Progress() {
           <Stat label="Protein" value={`${t.protein} g`} hint="per day" />
         </div>
       </div>
+
+      <WeeklyReview />
 
       <Card className="mb-3 p-6">
         <div className="mb-4 flex items-baseline justify-between">
@@ -219,5 +224,123 @@ function CalorieBars({ days, target }: { days: { d: string; kcal: number }[]; ta
         ))}
       </div>
     </div>
+  )
+}
+
+function WeeklyReview() {
+  const profile = useStore((s) => s.profile)!
+  const logs = useStore((s) => s.logs)
+  const weights = useStore((s) => s.weights)
+  const slips = useStore((s) => s.slips)
+  const cravings = useStore((s) => s.cravings)
+  const settings = useStore((s) => s.settings)
+  const t = useTargets()!
+  const today = todayISO()
+  const [review, setReview] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const w = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6)).filter((d) => d >= profile.startDate)
+    const per = days.map((d) => {
+      const l = logs.filter((x) => x.date === d)
+      return { d, kcal: l.reduce((s, x) => s + x.kcal, 0), protein: l.reduce((s, x) => s + x.protein, 0), n: l.length }
+    })
+    const logged = per.filter((p) => p.n > 0)
+    const onTarget = logged.filter((p) => Math.abs(p.kcal - t.kcal) <= t.kcal * 0.1 || (p.kcal < t.kcal && p.kcal > t.kcal * 0.75)).length
+    const proteinDays = logged.filter((p) => p.protein >= t.protein * 0.85).length
+    const sugarFree = days.filter((d) => !slips.includes(d)).length
+    const inWeek = weights.filter((x) => x.date >= addDays(today, -7))
+    const before = [...weights].reverse().find((x) => x.date < addDays(today, -6))
+    const startW = before ?? inWeek[0]
+    const endW = weights[weights.length - 1]
+    const delta = startW && endW && startW !== endW ? +(endW.kg - startW.kg).toFixed(1) : null
+    const cr = cravings.filter((c) => c.date >= addDays(today, -6))
+    return {
+      days: days.length,
+      logged: logged.length,
+      avg: logged.length ? Math.round(logged.reduce((s, p) => s + p.kcal, 0) / logged.length) : 0,
+      onTarget,
+      proteinDays,
+      sugarFree,
+      delta,
+      cravings: cr.length,
+      beaten: cr.filter((c) => c.outcome !== 'gave_in').length,
+      per,
+    }
+  }, [logs, weights, slips, cravings, today, t, profile.startDate])
+
+  async function ask() {
+    setBusy(true)
+    setErr('')
+    try {
+      const text = await generate({
+        apiKey: settings.apiKey,
+        model: settings.model,
+        system:
+          'You are a sharp, warm fat-loss coach for a college student eating from a hostel mess. Write a weekly review: 1 line verdict, then 3 short bullets (what went well, the one thing to fix, a specific plan for next week using mess food). Under 120 words. No emojis, no fluff.',
+        turns: [
+          {
+            role: 'user',
+            text: `${profileBrief(profile, t, currentKg(weights, profile))}
+
+LAST 7 DAYS
+Days logged: ${w.logged}/${w.days}; average ${w.avg} kcal on logged days (target ${t.kcal}); on-target days ${w.onTarget}; protein-target days ${w.proteinDays}.
+Sugar-free days: ${w.sugarFree}/${w.days}. Cravings: ${w.cravings} (${w.beaten} beaten).
+Weight change: ${w.delta === null ? 'not enough weigh-ins' : `${w.delta} kg`}.
+Per day: ${w.per.map((p) => `${p.d}: ${p.kcal} kcal / ${p.protein} g`).join('; ')}`,
+          },
+        ],
+        temperature: 0.6,
+      })
+      setReview(text)
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const stats = [
+    { label: 'Days logged', value: w.logged, suffix: `/${w.days}` },
+    { label: 'Avg calories', value: w.avg, suffix: '' },
+    { label: 'On target', value: w.onTarget, suffix: ' days' },
+    { label: 'Protein hit', value: w.proteinDays, suffix: ' days' },
+    { label: 'Sugar-free', value: w.sugarFree, suffix: ` /${w.days}` },
+  ]
+
+  return (
+    <Card className="mb-3 p-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-semibold">This week</h2>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">
+            {w.delta === null ? 'Weigh in twice this week to see the change' : `${w.delta <= 0 ? '' : '+'}${w.delta} kg vs last week`}
+          </p>
+        </div>
+        {settings.apiKey && (
+          <Button size="sm" variant="ghost" onClick={ask} disabled={busy}>
+            {busy ? <Spinner size={14} /> : <Sparkles size={14} />} {review ? 'Review again' : 'Review my week'}
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-5">
+        {stats.map((s, i) => (
+          <Reveal key={s.label} index={i}>
+            <div className="eyebrow mb-1.5">{s.label}</div>
+            <div className="display num text-[30px]">
+              <CountUp value={s.value} />
+              <span className="font-sans text-[12px] text-ink-3">{s.suffix}</span>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+      {err && <p className="mt-4 text-[13px] text-skip">{err}</p>}
+      {review && (
+        <Reveal className="mt-5 rounded-2xl bg-surface-2 p-5 text-[14.5px] leading-relaxed">
+          <Markdown text={review} />
+        </Reveal>
+      )}
+    </Card>
   )
 }

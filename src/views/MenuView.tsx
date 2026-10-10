@@ -34,7 +34,7 @@ export function MenuView() {
 
   if (!month) {
     return (
-      <div className="rise">
+      <div className="">
         <PageHeader eyebrow="Mess menu" title="Upload this month's menu" />
         <Card className="p-6 sm:p-8">
           <MenuUpload />
@@ -52,7 +52,7 @@ export function MenuView() {
   const dm = sheet?.days[dayNum] ?? sheet?.weekdays[new Date(month.year, month.month - 1, dayNum).getDay()]
 
   return (
-    <div className="rise">
+    <div className="">
       <PageHeader eyebrow="Mess menu" title={`${monthName(month.month)} ${month.year}`}>
         {menus.length > 1 && (
           <select className="field h-10 w-auto py-0" value={month.id} onChange={(e) => setMenuId(e.target.value)} aria-label="Month">

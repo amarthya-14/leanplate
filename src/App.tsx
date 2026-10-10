@@ -1,11 +1,15 @@
 import { CalendarDays, Flame, House, MessageCircle, Settings as SettingsIcon, TrendingDown } from 'lucide-react'
+import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { useEffect, useState, type ComponentType } from 'react'
+import { EASE } from './components/motion'
+import { Toaster } from './components/Toast'
 import { cx } from './components/ui'
+import { startReminderLoop } from './lib/reminders'
 import { useStore } from './lib/store'
 import { Coach } from './views/Coach'
 import { Cravings } from './views/Cravings'
 import { MenuView } from './views/MenuView'
-import { Onboarding } from './views/Onboarding'
+import { Onboarding, Wordmark } from './views/Onboarding'
 import { Progress } from './views/Progress'
 import { Settings } from './views/Settings'
 import { Today } from './views/Today'
@@ -45,6 +49,8 @@ export function App() {
   const [view, setView] = useState<View>(readHash)
   const [coachPrompt, setCoachPrompt] = useState<string | undefined>()
 
+  useEffect(() => (profile ? startReminderLoop() : undefined), [profile])
+
   useEffect(() => {
     const onHash = () => setView(readHash())
     window.addEventListener('hashchange', onHash)
@@ -57,24 +63,37 @@ export function App() {
     window.scrollTo({ top: 0 })
   }
 
-  if (!profile) return <Onboarding />
+  if (!profile)
+    return (
+      <MotionConfig reducedMotion="user">
+        <Onboarding />
+        <div className="grain" />
+      </MotionConfig>
+    )
 
   return (
-    <div className="min-h-dvh md:flex">
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line px-4 py-7 md:flex">
-        <Wordmark />
+    <MotionConfig reducedMotion="user">
+    <div className="ambient opacity-60" />
+    <div className="relative z-10 min-h-dvh md:flex">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-bg/60 px-4 py-7 backdrop-blur-xl md:flex">
+        <Wordmark className="px-2" />
         <nav className="mt-10 space-y-0.5">
           {NAV.map((n) => (
             <button
               key={n.id}
               onClick={() => go(n.id)}
               className={cx(
-                'flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition',
-                view === n.id ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:bg-surface-2/60 hover:text-ink-2',
+                'relative flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition-colors',
+                view === n.id ? 'text-ink' : 'text-ink-3 hover:text-ink-2',
               )}
             >
-              <n.icon size={17} strokeWidth={view === n.id ? 2.2 : 1.8} />
-              {n.label}
+              {view === n.id && (
+                <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-xl border border-line bg-surface shadow-card" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />
+              )}
+              <span className="relative flex items-center gap-3">
+                <n.icon size={17} strokeWidth={view === n.id ? 2.2 : 1.8} />
+                {n.label}
+              </span>
             </button>
           ))}
         </nav>
@@ -91,12 +110,22 @@ export function App() {
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-28 sm:px-6 md:px-10 md:pt-12 md:pb-16">
-        {view === 'today' && <Today go={go} />}
-        {view === 'menu' && <MenuView />}
-        {view === 'progress' && <Progress />}
-        {view === 'cravings' && <Cravings go={go} />}
-        {view === 'coach' && <Coach go={go} initialPrompt={coachPrompt} clearPrompt={() => setCoachPrompt(undefined)} />}
-        {view === 'settings' && <Settings />}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={view}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6, transition: { duration: 0.15 } }}
+            transition={{ duration: 0.4, ease: EASE }}
+          >
+            {view === 'today' && <Today go={go} />}
+            {view === 'menu' && <MenuView />}
+            {view === 'progress' && <Progress />}
+            {view === 'cravings' && <Cravings go={go} />}
+            {view === 'coach' && <Coach go={go} initialPrompt={coachPrompt} clearPrompt={() => setCoachPrompt(undefined)} />}
+            {view === 'settings' && <Settings />}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/90 backdrop-blur-md md:hidden">
@@ -105,26 +134,22 @@ export function App() {
             <button
               key={n.id}
               onClick={() => go(n.id)}
-              className={cx('flex cursor-pointer flex-col items-center gap-1 py-2.5 text-[10.5px] font-medium transition', view === n.id ? 'text-ink' : 'text-ink-3')}
+              className={cx('relative flex cursor-pointer flex-col items-center gap-1 py-2.5 text-[10.5px] font-medium transition-colors', view === n.id ? 'text-ink' : 'text-ink-3')}
             >
-              <n.icon size={20} strokeWidth={view === n.id ? 2.2 : 1.7} />
+              {view === n.id && (
+                <motion.span layoutId="tab-dot" className="absolute top-0 h-[2px] w-8 rounded-full bg-accent-text" transition={{ type: 'spring', stiffness: 500, damping: 36 }} />
+              )}
+              <motion.span whileTap={{ scale: 0.85 }}>
+                <n.icon size={20} strokeWidth={view === n.id ? 2.2 : 1.7} />
+              </motion.span>
               {n.label}
             </button>
           ))}
         </div>
       </nav>
     </div>
-  )
-}
-
-function Wordmark() {
-  return (
-    <div className="flex items-center gap-2.5 px-1">
-      <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden>
-        <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" strokeWidth="5" />
-        <path d="M32 6a26 26 0 0 1 26 26H32z" fill="var(--gold)" />
-      </svg>
-      <span className="display text-[24px]">Leanplate</span>
-    </div>
+    <Toaster />
+    <div className="grain" />
+    </MotionConfig>
   )
 }

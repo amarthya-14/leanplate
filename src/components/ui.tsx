@@ -1,4 +1,6 @@
 import { X } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { SplitWords } from './motion'
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
@@ -16,12 +18,12 @@ export function Button({
       {...rest}
       className={cx(
         'inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-150 select-none',
-        'disabled:opacity-45 disabled:pointer-events-none active:scale-[0.98] cursor-pointer',
+        'disabled:opacity-45 disabled:pointer-events-none active:scale-[0.97] cursor-pointer',
         'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent-soft',
         size === 'sm' && 'h-8 px-3.5 text-[13px]',
         size === 'md' && 'h-10 px-5 text-sm',
         size === 'lg' && 'h-12 px-6 text-[15px]',
-        variant === 'primary' && 'bg-accent text-accent-ink hover:opacity-90',
+        variant === 'primary' && 'bg-accent text-accent-ink shadow-[0_6px_20px_-8px_color-mix(in_oklab,var(--accent)_60%,transparent)] hover:-translate-y-px hover:shadow-[0_10px_24px_-8px_color-mix(in_oklab,var(--accent)_55%,transparent)]',
         variant === 'secondary' && 'bg-surface border border-line-strong text-ink hover:bg-surface-2',
         variant === 'ghost' && 'text-ink-2 hover:text-ink hover:bg-surface-2',
         variant === 'danger' && 'bg-skip text-white hover:opacity-90',
@@ -80,7 +82,7 @@ export function Ring({
     <div className="relative grid place-items-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
-        <circle
+        <motion.circle
           cx={size / 2}
           cy={size / 2}
           r={r}
@@ -89,8 +91,9 @@ export function Ring({
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}
-          strokeDashoffset={c * (1 - pct)}
-          style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.2,0.7,0.2,1)' }}
+          initial={{ strokeDashoffset: c }}
+          animate={{ strokeDashoffset: c * (1 - pct) }}
+          transition={{ duration: 1.4, ease: [0.22, 0.8, 0.24, 1], delay: 0.15 }}
         />
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">{children}</div>
@@ -182,25 +185,40 @@ export function Sheet({ open, onClose, title, children, wide }: { open: boolean;
       document.body.style.overflow = prev
     }
   }, [open, onClose])
-  if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
-      <div
-        className={cx(
-          'rise relative max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-line bg-surface p-6 shadow-2xl sm:rounded-3xl',
-          wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
-        )}
-      >
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <h2 className="display text-[28px]">{title}</h2>
-          <IconButton label="Close" onClick={onClose}>
-            <X size={18} />
-          </IconButton>
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
+          <motion.div
+            className="absolute inset-0 bg-black/35 backdrop-blur-[3px]"
+            onClick={onClose}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+          />
+          <motion.div
+            initial={{ y: 40, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 30, opacity: 0, transition: { duration: 0.18 } }}
+            transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+            className={cx(
+              'relative max-h-[92dvh] w-full overflow-y-auto rounded-t-[28px] border border-line bg-surface p-6 shadow-2xl sm:rounded-[28px]',
+              wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
+            )}
+          >
+            <div className="mx-auto -mt-2 mb-4 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <h2 className="display text-[28px]">{title}</h2>
+              <IconButton label="Close" onClick={onClose}>
+                <X size={18} />
+              </IconButton>
+            </div>
+            {children}
+          </motion.div>
         </div>
-        {children}
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -286,8 +304,12 @@ export function PageHeader({ eyebrow, title, children }: { eyebrow?: ReactNode; 
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
-        {eyebrow && <div className="eyebrow mb-2">{eyebrow}</div>}
-        <h1 className="display text-[40px] sm:text-[48px]">{title}</h1>
+        {eyebrow && (
+          <motion.div className="eyebrow mb-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}>
+            {eyebrow}
+          </motion.div>
+        )}
+        <h1 className="display text-[42px] leading-[1.02] sm:text-[52px]">{typeof title === 'string' ? <SplitWords text={title} /> : title}</h1>
       </div>
       {children && <div className="flex items-center gap-2">{children}</div>}
     </header>

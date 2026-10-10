@@ -1,7 +1,11 @@
-import { Check, Download, Eye, EyeOff, Upload } from 'lucide-react'
+import { BellRing, CalendarPlus, Check, Download, Eye, EyeOff, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button, Card, Label, NumberField, PageHeader, Segmented, Spinner } from '../components/ui'
 import { listModels } from '../lib/gemini'
+import { downloadIcs, enableNotifications, notificationsSupported, testNotification } from '../lib/reminders'
+import { findMenu } from '../lib/store'
+import { todayISO } from '../lib/date'
+import { toast } from '../components/Toast'
 import { ACTIVITY, PACE, targets } from '../lib/nutrition'
 import { currentKg, useStore } from '../lib/store'
 import type { Activity, Diet, Pace, Profile, Sex, Theme } from '../lib/types'
@@ -64,7 +68,7 @@ export function Settings() {
   }
 
   return (
-    <div className="rise max-w-3xl">
+    <div className="max-w-3xl">
       <PageHeader eyebrow="Settings" title="Settings" />
 
       <Section title="You" desc="Changing these recalculates your targets.">
@@ -178,6 +182,73 @@ export function Settings() {
         </div>
       </Section>
 
+      <Section title="Meal reminders" desc="Get the plate — what to take and what to skip — right when the mess opens.">
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-[14.5px] font-medium">
+                <BellRing size={16} className="text-accent-text" /> App notifications
+              </div>
+              <p className="mt-1 max-w-md text-[13px] text-ink-3">
+                Fire while Leanplate is open or running in the background (best after “Add to Home Screen”). Skipped if you've already logged that meal.
+              </p>
+            </div>
+            <Toggle
+              on={!!settings.reminders}
+              onChange={async (on) => {
+                if (!on) return updateSettings({ reminders: false })
+                const r = await enableNotifications()
+                if (r === 'granted') {
+                  updateSettings({ reminders: true })
+                  testNotification()
+                  toast('Meal reminders on')
+                } else toast(r === 'denied' ? 'Notifications are blocked — allow them in browser settings' : 'This browser does not support notifications')
+              }}
+              disabled={!notificationsSupported()}
+            />
+          </div>
+          {settings.reminders && (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[13px] text-ink-2">Remind me</span>
+              <Segmented
+                size="sm"
+                value={String(settings.reminderLead ?? 0)}
+                onChange={(v) => updateSettings({ reminderLead: Number(v) })}
+                options={[
+                  { value: '0', label: 'When it opens' },
+                  { value: '10', label: '10 min before' },
+                  { value: '20', label: '20 min before' },
+                ]}
+              />
+              <Button size="sm" variant="ghost" onClick={() => testNotification()}>
+                Send a test
+              </Button>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
+            <div>
+              <div className="flex items-center gap-2 text-[14.5px] font-medium">
+                <CalendarPlus size={16} className="text-accent-text" /> Calendar reminders
+              </div>
+              <p className="mt-1 max-w-md text-[13px] text-ink-3">
+                Works even when the app is closed. Adds every remaining meal this month to your phone's calendar, with an alert and the full plate in the notes.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                const m = findMenu(store.menus, todayISO())
+                if (!m) return toast('Upload this month’s menu first')
+                downloadIcs(m)
+                toast('Calendar file downloaded — open it to add the reminders')
+              }}
+            >
+              <Download size={14} /> Add month to calendar
+            </Button>
+          </div>
+        </div>
+      </Section>
+
       <Section title="Appearance">
         <Segmented
           value={settings.theme}
@@ -218,5 +289,19 @@ function Section({ title, desc, children }: { title: string; desc?: string; chil
       {!desc && <div className="mb-4" />}
       {children}
     </Card>
+  )
+}
+
+function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-300 disabled:opacity-40 ${on ? 'bg-accent-text' : 'bg-surface-3'}`}
+    >
+      <span className={`absolute top-1 left-1 size-5 rounded-full bg-white shadow transition-transform duration-300 ${on ? 'translate-x-5' : ''}`} />
+    </button>
   )
 }

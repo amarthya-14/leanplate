@@ -25,11 +25,13 @@ You can also put the key in a `.env` file (see `.env.example`).
 
 ## Screens
 
-- **Today**: calories left, protein, water, sugar-free streak, and the plate for each meal. Untick what you didn't take, then tap "Ate this" to log it.
+- **Today**: a "Next move" card that changes with the time of day (meal coming up, craving window, protein gap, weigh-in, kitchen closed), plus calories left, protein, water, sugar-free streak, weight, and the plate for each meal. Untick what you didn't take, then tap "Ate this" to log it; every log can be undone.
+- **Meal reminders**: a notification when the mess opens with what to take and what to skip (works while the app is open or in the background), and **Add month to calendar**, which exports every meal as calendar alerts that fire even when the app is closed.
+- **Canteen & room quick-add**: one tap to log tea, samosa, Maggi, eggs, chocolate and other common extras, with sugary items marked.
 - **Menu**: upload the month's Excel, switch between Veg/Non-Veg and Special, and browse any day with colour-coded dishes (good / small portion / skip).
 - **Cravings**: a guided 10-minute reset, hostel-friendly swaps, a streak calendar, and your craving patterns.
 - **Coach**: chat with Gemini about anything food-related.
-- **Progress**: weigh-ins, a 7-entry average trend, goal projection, and a 14-day calorie history.
+- **Progress**: a weekly review (days logged, average calories, on-target days, protein days, sugar-free days, weight change, and an optional Gemini debrief), weigh-ins, a 7-entry average trend, goal projection, and a 14-day calorie history.
 
 ## Menu format
 

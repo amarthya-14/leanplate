@@ -78,7 +78,7 @@ export function Cravings({ go }: { go: (v: string, prompt?: string) => void }) {
   const days = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27))
 
   return (
-    <div className="rise">
+    <div className="">
       <PageHeader eyebrow="Cravings" title="Ride the wave" />
 
       <div className="mb-3 grid gap-3 md:grid-cols-[1fr_1.3fr]">
@@ -156,7 +156,7 @@ export function Cravings({ go }: { go: (v: string, prompt?: string) => void }) {
                   </span>
                 </div>
               </div>
-              <p key={step.title} className="rise mt-3 max-w-md text-[15px] leading-relaxed text-ink-2">{step.body}</p>
+              <p key={step.title} className="mt-3 max-w-md text-[15px] leading-relaxed text-ink-2">{step.body}</p>
               <div className="mt-5 h-1 overflow-hidden rounded-full bg-surface-3">
                 <div className="h-full bg-accent-text transition-all duration-1000" style={{ width: `${(elapsed / DURATION) * 100}%` }} />
               </div>
@@ -172,7 +172,7 @@ export function Cravings({ go }: { go: (v: string, prompt?: string) => void }) {
           )}
 
           {done && (
-            <div className="rise flex h-full flex-col">
+            <div className="flex h-full flex-col">
               <div className="eyebrow mb-2">Logged</div>
               <h3 className="display text-[32px] leading-tight">
                 {done === 'resisted' ? 'That is the habit getting weaker.' : done === 'swapped' ? 'Smart swap. That counts.' : 'Fine. Next meal, normal plate.'}

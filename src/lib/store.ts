@@ -36,7 +36,7 @@ interface State {
   removeMenu: (id: string) => void
   savePlan: (p: DayPlan) => void
   clearPlans: () => void
-  addLog: (l: Omit<LogEntry, 'id' | 'at'>) => void
+  addLog: (l: Omit<LogEntry, 'id' | 'at'>) => string
   removeLog: (id: string) => void
   logWeight: (date: string, kg: number) => void
   removeWeight: (date: string) => void
@@ -55,6 +55,8 @@ const initialSettings: Settings = {
   model: (import.meta.env.VITE_GEMINI_MODEL as string | undefined) ?? DEFAULT_MODEL,
   sheetName: '',
   theme: 'system',
+  reminders: false,
+  reminderLead: 0,
 }
 
 const initial = {
@@ -93,7 +95,11 @@ export const useStore = create<State>()(
       removeMenu: (id) => set((s) => ({ menus: s.menus.filter((m) => m.id !== id) })),
       savePlan: (p) => set((s) => ({ plans: { ...s.plans, [`${p.date}|${p.sheet}`]: p } })),
       clearPlans: () => set({ plans: {} }),
-      addLog: (l) => set((s) => ({ logs: [...s.logs, { ...l, id: uid(), at: Date.now() }] })),
+      addLog: (l) => {
+        const id = uid()
+        set((s) => ({ logs: [...s.logs, { ...l, id, at: Date.now() }] }))
+        return id
+      },
       removeLog: (id) => set((s) => ({ logs: s.logs.filter((l) => l.id !== id) })),
       logWeight: (date, kg) =>
         set((s) => ({

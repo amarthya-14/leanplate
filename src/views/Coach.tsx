@@ -103,7 +103,7 @@ export function Coach({ go, initialPrompt, clearPrompt }: { go: (v: string) => v
 
   if (!settings.apiKey) {
     return (
-      <div className="rise">
+      <div className="">
         <PageHeader eyebrow="Coach" title="Your nutrition coach" />
         <Card className="max-w-xl p-7">
           <KeyRound size={20} className="mb-4 text-accent-text" />
@@ -123,7 +123,7 @@ export function Coach({ go, initialPrompt, clearPrompt }: { go: (v: string) => v
   }
 
   return (
-    <div className="rise flex min-h-[calc(100dvh-9rem)] flex-col md:min-h-[calc(100dvh-5rem)]">
+    <div className="flex min-h-[calc(100dvh-9rem)] flex-col md:min-h-[calc(100dvh-5rem)]">
       <PageHeader eyebrow="Coach" title="Ask anything">
         {chat.length > 0 && (
           <IconButton label="Clear conversation" onClick={clearChat}>

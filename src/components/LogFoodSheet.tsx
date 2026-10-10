@@ -4,7 +4,32 @@ import { estimateText } from '../lib/foods'
 import { aiEstimate } from '../lib/gemini'
 import { useStore } from '../lib/store'
 import { MEAL_LABEL, MEALS, type MealKey } from '../lib/types'
-import { Button, Label, NumberField, Segmented, Sheet, Spinner } from './ui'
+import { toast } from './Toast'
+import { Button, cx, Label, NumberField, Segmented, Sheet, Spinner } from './ui'
+
+/** Canteen & room staples with realistic numbers. `sugar` marks the craving traps. */
+const QUICK: { name: string; kcal: number; protein: number; sugar?: boolean }[] = [
+  { name: 'Tea with sugar', kcal: 90, protein: 2, sugar: true },
+  { name: 'Coffee with sugar', kcal: 110, protein: 3, sugar: true },
+  { name: 'Black tea / coffee', kcal: 10, protein: 0 },
+  { name: '2 boiled eggs', kcal: 150, protein: 12 },
+  { name: 'Banana', kcal: 100, protein: 1 },
+  { name: 'Roasted chana (handful)', kcal: 120, protein: 7 },
+  { name: 'Peanuts (handful)', kcal: 170, protein: 7 },
+  { name: 'Bread omelette', kcal: 330, protein: 16 },
+  { name: 'Samosa', kcal: 260, protein: 5 },
+  { name: 'Veg puff', kcal: 280, protein: 5 },
+  { name: 'Maggi (1 pack)', kcal: 350, protein: 8 },
+  { name: 'Paneer roll', kcal: 450, protein: 16 },
+  { name: 'Chicken roll', kcal: 480, protein: 24 },
+  { name: 'Lays (small)', kcal: 130, protein: 2 },
+  { name: 'Biscuits (4)', kcal: 140, protein: 2, sugar: true },
+  { name: 'Dairy Milk (small)', kcal: 130, protein: 2, sugar: true },
+  { name: 'Coke / Sprite (250 ml)', kcal: 105, protein: 0, sugar: true },
+  { name: 'Fruit juice (glass)', kcal: 140, protein: 1, sugar: true },
+  { name: 'Ice cream cup', kcal: 150, protein: 3, sugar: true },
+  { name: 'Sweet lassi', kcal: 220, protein: 7, sugar: true },
+]
 
 type Meal = MealKey | 'extra'
 
@@ -12,6 +37,8 @@ export function LogFoodSheet({ open, onClose, date, meal: initialMeal }: { open:
   const settings = useStore((s) => s.settings)
   const diet = useStore((s) => s.profile?.diet ?? 'veg')
   const addLog = useStore((s) => s.addLog)
+  const removeLog = useStore((s) => s.removeLog)
+  const [tab, setTab] = useState<'quick' | 'type'>('quick')
   const [meal, setMeal] = useState<Meal>(initialMeal ?? 'extra')
   const [text, setText] = useState('')
   const [kcal, setKcal] = useState<number | ''>('')
@@ -30,8 +57,15 @@ export function LogFoodSheet({ open, onClose, date, meal: initialMeal }: { open:
       setLines([])
       setComment('')
       setErr('')
+      setTab(initialMeal && initialMeal !== 'extra' ? 'type' : 'quick')
     }
   }, [open, initialMeal])
+
+  function quickAdd(q: (typeof QUICK)[number]) {
+    const id = addLog({ date, meal, label: q.name, kcal: q.kcal, protein: q.protein })
+    toast(`${q.name} · ${q.kcal} kcal`, { label: 'Undo', run: () => removeLog(id) })
+    onClose()
+  }
 
   async function estimate() {
     if (!text.trim()) return
@@ -59,7 +93,8 @@ export function LogFoodSheet({ open, onClose, date, meal: initialMeal }: { open:
 
   function save() {
     if (kcal === '') return
-    addLog({ date, meal, label: text.trim() || 'Food', kcal: Number(kcal), protein: Number(protein || 0) })
+    const id = addLog({ date, meal, label: text.trim() || 'Food', kcal: Number(kcal), protein: Number(protein || 0) })
+    toast(`Logged · ${kcal} kcal`, { label: 'Undo', run: () => removeLog(id) })
     onClose()
   }
 
@@ -76,6 +111,39 @@ export function LogFoodSheet({ open, onClose, date, meal: initialMeal }: { open:
             options={[...MEALS.map((m) => ({ value: m as Meal, label: MEAL_LABEL[m] })), { value: 'extra' as Meal, label: 'Extra' }]}
           />
         </div>
+        <Segmented
+          className="w-full"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'quick', label: 'Canteen & room' },
+            { value: 'type', label: 'Describe it' },
+          ]}
+        />
+
+        {tab === 'quick' ? (
+          <div>
+            <div className="flex flex-wrap gap-2">
+              {QUICK.map((q) => (
+                <button
+                  key={q.name}
+                  onClick={() => quickAdd(q)}
+                  className={cx(
+                    'group flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-[13px] transition active:scale-95',
+                    q.sugar ? 'border-skip/25 hover:border-skip/50 hover:bg-skip-soft' : 'border-line-strong hover:border-accent-text/50 hover:bg-accent-soft',
+                  )}
+                >
+                  <span className="text-ink">{q.name}</span>
+                  <span className="num text-ink-3">{q.kcal}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-4 flex items-center gap-2 text-[12.5px] text-ink-3">
+              <span className="inline-block size-2 rounded-full border border-skip/50 bg-skip-soft" /> Red outline = added sugar. Logging it honestly still counts as a win.
+            </p>
+          </div>
+        ) : (
+        <>
         <div>
           <Label hint={settings.apiKey ? 'Gemini estimates it' : 'Offline estimate'}>What did you eat?</Label>
           <textarea
@@ -124,6 +192,8 @@ export function LogFoodSheet({ open, onClose, date, meal: initialMeal }: { open:
         <Button variant="primary" size="lg" className="w-full" onClick={save} disabled={kcal === ''}>
           Add to today
         </Button>
+        </>
+        )}
       </div>
     </Sheet>
   )

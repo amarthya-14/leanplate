@@ -112,4 +112,7 @@ export interface Settings {
   model: string
   sheetName: string
   theme: Theme
+  reminders?: boolean
+  /** minutes before the mess opens */
+  reminderLead?: number
 }

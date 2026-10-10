@@ -1,4 +1,5 @@
 import { Check, ChevronDown, Lightbulb, Plus, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { currentMeal, fmtTime, todayISO } from '../lib/date'
 import { mealTotals } from '../lib/foods'
@@ -6,6 +7,8 @@ import { useStore } from '../lib/store'
 import { MEAL_LABEL, MEALS, type MealKey, type MealPlan } from '../lib/types'
 import { useDayPlan } from '../lib/usePlan'
 import { LogFoodSheet } from './LogFoodSheet'
+import { EASE } from './motion'
+import { toast } from './Toast'
 import { Button, cx, Pill, Spinner } from './ui'
 
 export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick?: () => void }) {
@@ -134,17 +137,18 @@ function MealCard({
   const chosenP = chosen.reduce((s, p) => s + p.protein, 0)
 
   function logPlate() {
-    addLog({
+    const id = addLog({
       date,
       meal,
       label: chosen.map((p) => `${p.item} (${p.portion})`).join(', ') || `${MEAL_LABEL[meal]} plate`,
       kcal: chosenK,
       protein: chosenP,
     })
+    toast(`${MEAL_LABEL[meal]} logged · ${chosenK} kcal`, { label: 'Undo', run: () => removeLog(id) })
   }
 
   return (
-    <article className={cx('card overflow-hidden transition', isNow && 'ring-1 ring-accent-text/40')}>
+    <article className={cx('card overflow-hidden transition-shadow duration-300', isNow && 'ring-1 ring-accent-text/40', !open && 'card-hover')}>
       <button onClick={onToggle} className="flex w-full cursor-pointer items-center gap-4 px-5 py-4 text-left sm:px-6">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -165,16 +169,30 @@ function MealCard({
           <div className="num text-[17px] font-medium">{logged.length ? loggedKcal : totals.kcal}</div>
           <div className="text-[11px] text-ink-3">{logged.length ? 'kcal eaten' : 'kcal planned'}</div>
         </div>
-        <ChevronDown size={18} className={cx('shrink-0 text-ink-3 transition', open && 'rotate-180')} />
+        <ChevronDown size={18} className={cx('shrink-0 text-ink-3 transition-transform duration-300', open && 'rotate-180')} />
       </button>
 
+      <AnimatePresence initial={false}>
       {open && !empty && (
-        <div className="rise border-t border-line px-5 pt-4 pb-5 sm:px-6">
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ height: { duration: 0.42, ease: EASE }, opacity: { duration: 0.25 } }}
+          className="overflow-hidden"
+        >
+        <div className="border-t border-line px-5 pt-4 pb-5 sm:px-6">
           <ul className="divide-y divide-line">
             {plan.picks.map((p, i) => {
               const disabled = off.has(i)
               return (
-                <li key={i} className="flex items-start gap-3 py-2.5">
+                <motion.li
+                  key={i}
+                  className="flex items-start gap-3 py-2.5"
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05 + i * 0.035, duration: 0.35, ease: EASE }}
+                >
                   <button
                     aria-label={disabled ? `Include ${p.item}` : `Exclude ${p.item}`}
                     onClick={() => {
@@ -189,7 +207,13 @@ function MealCard({
                       disabled ? 'border-line-strong bg-transparent' : 'border-accent-text bg-accent-text text-accent-ink',
                     )}
                   >
-                    {!disabled && <Check size={12} strokeWidth={3} />}
+                    <AnimatePresence initial={false}>
+                      {!disabled && (
+                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: 'spring', stiffness: 600, damping: 24 }}>
+                          <Check size={12} strokeWidth={3} />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </button>
                   <div className={cx('min-w-0 flex-1', disabled && 'opacity-45')}>
                     <div className="text-[15px] leading-snug">
@@ -202,7 +226,7 @@ function MealCard({
                     {p.kcal}
                     <span className="ml-2 hidden text-ink-3/70 sm:inline">{p.protein}g</span>
                   </div>
-                </li>
+                </motion.li>
               )
             })}
           </ul>
@@ -257,7 +281,9 @@ function MealCard({
             </div>
           </div>
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </article>
   )
 }
