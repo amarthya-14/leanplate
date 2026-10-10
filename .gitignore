@@ -5,3 +5,7 @@ dist
 .DS_Store
 .vercel
 .env*
+.agents/
+.claude/
+skills-lock.json
+!.env.example
