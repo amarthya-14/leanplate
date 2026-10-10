@@ -23,7 +23,7 @@ export function Today({ go }: { go: (v: string, prompt?: string) => void }) {
   const updateSettings = useStore((s) => s.updateSettings)
   const weights = useStore((s) => s.weights)
   const water = useStore((s) => s.water[date] ?? 0)
-  const setWater = useStore((s) => s.setWater)
+  const addWater = useStore((s) => s.addWater)
   const removeLog = useStore((s) => s.removeLog)
   const slips = useStore((s) => s.slips)
   const t = useTargets()!
@@ -167,12 +167,12 @@ export function Today({ go }: { go: (v: string, prompt?: string) => void }) {
               ))}
             </div>
             <div className="mt-3 flex items-center gap-1.5">
-              <IconButton label="Remove a glass" onClick={() => setWater(date, water - 1)} className="size-8 border border-line">
+              <IconButton label="Remove a glass" onClick={() => addWater(date, -1)} className="size-8 border border-line">
                 <Minus size={14} />
               </IconButton>
               <button
                 aria-label="Add a glass"
-                onClick={() => setWater(date, water + 1)}
+                onClick={() => addWater(date, 1)}
                 className="grid size-8 cursor-pointer place-items-center rounded-full bg-accent text-accent-ink transition hover:opacity-90 active:scale-90"
               >
                 <Plus size={14} />

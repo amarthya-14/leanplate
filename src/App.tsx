@@ -85,7 +85,7 @@ export function App() {
       <MotionConfig reducedMotion="user">
         <AnimatePresence mode="wait">
           <motion.div key={gate ?? 'onboarding'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, filter: 'blur(8px)' }} transition={{ duration: 0.5, ease: EASE }}>
-            {gate === 'splash' ? <Splash /> : gate === 'auth' ? <AuthPage onLocal={() => setLocal(true)} /> : <Onboarding skipWelcome={auth.status === 'signedIn'} />}
+            {gate === 'splash' ? <Splash /> : gate === 'auth' ? <AuthPage onLocal={() => setLocal(true)} /> : <Onboarding />}
           </motion.div>
         </AnimatePresence>
         <Toaster />

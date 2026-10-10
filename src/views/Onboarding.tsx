@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Lock, Minus, Plus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Minus, Plus } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CountUp, EASE, SplitWords } from '../components/motion'
@@ -8,231 +8,14 @@ import { ACTIVITY, bmi, bmiBand, PACE, targets } from '../lib/nutrition'
 import { useStore } from '../lib/store'
 import type { Activity, Diet, Pace, Profile, Sex } from '../lib/types'
 
-export function Onboarding({ skipWelcome = false }: { skipWelcome?: boolean }) {
-  const [started, setStarted] = useState(skipWelcome)
+export function Onboarding() {
   return (
     <div className="relative min-h-dvh overflow-hidden bg-bg">
       <div className="ambient" />
-      <AnimatePresence mode="wait">
-        {started ? (
-          <motion.div key="steps" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="relative z-10">
-            <Steps onExit={() => setStarted(false)} />
-          </motion.div>
-        ) : (
-          <motion.div key="welcome" exit={{ opacity: 0, y: -16, filter: 'blur(6px)' }} transition={{ duration: 0.45, ease: EASE }} className="relative z-10">
-            <Welcome onStart={() => setStarted(true)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="relative z-10">
+        <Steps />
+      </motion.div>
     </div>
-  )
-}
-
-// ── Welcome ──────────────────────────────────────────────────────────
-
-function Welcome({ onStart }: { onStart: () => void }) {
-  return (
-    <div className="mx-auto flex min-h-dvh max-w-6xl flex-col px-5 py-6 sm:px-8 sm:py-8">
-      <motion.header
-        className="flex items-center justify-between"
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, ease: EASE }}
-      >
-        <Wordmark />
-        <span className="flex items-center gap-1.5 text-[12px] text-ink-3">
-          <Lock size={12} /> Private · no sign-up
-        </span>
-      </motion.header>
-
-      <main className="grid flex-1 items-center gap-10 py-8 md:grid-cols-[1.05fr_1fr] md:gap-6 md:py-0">
-        <div className="order-2 md:order-1">
-          <motion.div
-            className="eyebrow mb-5 flex items-center gap-2"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
-          >
-            <span className="h-px w-6 bg-ink-3" /> For people who eat at the hostel mess
-          </motion.div>
-          <h1 className="display text-[52px] leading-[0.98] sm:text-[72px] lg:text-[84px]">
-            <span className="block">
-              <SplitWords text="Eat from the mess." delay={0.25} />
-            </span>
-            <span className="text-balance block text-accent-text italic">
-              <SplitWords text="Still lose the weight." delay={0.55} />
-            </span>
-          </h1>
-          <motion.p
-            className="text-pretty mt-6 max-w-md text-[16.5px] leading-relaxed text-ink-2"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.0, duration: 0.8, ease: EASE }}
-          >
-            Upload this month's mess menu. Every meal, Leanplate tells you what to take, exactly how much, and what to leave on the counter — and helps you
-            break the sugar habit for good.
-          </motion.p>
-
-          <motion.ol
-            className="mt-8 grid max-w-lg grid-cols-3 gap-4 border-t border-line pt-5"
-            initial="hidden"
-            animate="show"
-            variants={{ show: { transition: { staggerChildren: 0.1, delayChildren: 1.2 } } }}
-          >
-            {[
-              ['Reads your', 'mess menu'],
-              ['Portions every', 'single meal'],
-              ['Talks you down', 'from cravings'],
-            ].map(([a, b], i) => (
-              <motion.li
-                key={i}
-                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } } }}
-                className="text-[13px] leading-snug text-ink-2"
-              >
-                <div className="num mb-1.5 text-[11px] font-medium text-ink-3">0{i + 1}</div>
-                {a}
-                <br />
-                {b}
-              </motion.li>
-            ))}
-          </motion.ol>
-
-          <motion.div
-            className="mt-10 flex flex-wrap items-center gap-4"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.5, duration: 0.7, ease: EASE }}
-          >
-            <Button variant="primary" size="lg" className="shine h-14 px-8 text-[15.5px]" onClick={onStart}>
-              Build my plan <ArrowRight size={17} />
-            </Button>
-            <span className="text-[13px] text-ink-3">Takes about a minute</span>
-          </motion.div>
-        </div>
-
-        <div className="order-1 flex justify-center md:order-2">
-          <PlateHero />
-        </div>
-      </main>
-    </div>
-  )
-}
-
-const SEGMENTS = [
-  { from: 0, to: 0.5, color: 'var(--accent-text)', label: 'Salad & sabzi', share: '½' },
-  { from: 0.5, to: 0.75, color: 'var(--gold)', label: 'Protein', share: '¼' },
-  { from: 0.75, to: 1, color: 'var(--ink-3)', label: 'Carbs', share: '¼' },
-]
-
-function PlateHero() {
-  const size = 340
-  const c = size / 2
-  return (
-    <div className="relative aspect-square w-[min(78vw,400px)]">
-      <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full overflow-visible">
-        <motion.circle
-          cx={c}
-          cy={c}
-          r={160}
-          fill="none"
-          stroke="var(--line-strong)"
-          strokeWidth={1}
-          strokeDasharray="2 6"
-          initial={{ opacity: 0, rotate: -30 }}
-          animate={{ opacity: 1, rotate: 0 }}
-          transition={{ duration: 2.4, ease: EASE }}
-          style={{ transformOrigin: 'center' }}
-        />
-        <motion.circle
-          cx={c}
-          cy={c}
-          r={138}
-          fill="var(--surface)"
-          stroke="var(--line)"
-          initial={{ scale: 0.86, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.1, ease: EASE, delay: 0.1 }}
-          style={{ transformOrigin: 'center', filter: 'drop-shadow(0 30px 40px rgb(26 25 21 / 0.10))' }}
-        />
-        <circle cx={c} cy={c} r={104} fill="none" stroke="var(--line)" />
-        {SEGMENTS.map((s, i) => (
-          <motion.circle
-            key={s.label}
-            cx={c}
-            cy={c}
-            r={121}
-            fill="none"
-            stroke={s.color}
-            strokeWidth={22}
-            strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: s.to - s.from - 0.035 }}
-            transition={{ duration: 1.1, ease: EASE, delay: 0.7 + i * 0.35 }}
-            style={{ rotate: s.from * 360 - 90 + 6, transformOrigin: 'center' }}
-          />
-        ))}
-        <motion.text
-          x={c}
-          y={c - 6}
-          textAnchor="middle"
-          className="display"
-          fontSize="44"
-          fill="var(--ink)"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.8, duration: 0.8 }}
-        >
-          your plate
-        </motion.text>
-        <motion.text
-          x={c}
-          y={c + 22}
-          textAnchor="middle"
-          fontSize="11"
-          letterSpacing="2.2"
-          fill="var(--ink-3)"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 2, duration: 0.8 }}
-        >
-          FROM TODAY'S MENU
-        </motion.text>
-      </svg>
-
-      <FloatCard className="top-[6%] -left-[4%] sm:-left-[10%]" delay={2.1} float={7}>
-        <div className="text-[11px] text-ink-3">Lunch · take</div>
-        <div className="text-[14px] font-medium">
-          Pulka <span className="text-accent-text">3 pcs</span>
-        </div>
-      </FloatCard>
-      <FloatCard className="top-[44%] -right-[2%] sm:-right-[8%]" delay={2.35} float={9}>
-        <div className="text-[11px] text-ink-3">Protein today</div>
-        <div className="num text-[14px] font-medium">
-          104 <span className="text-ink-3">/ 120 g</span>
-        </div>
-      </FloatCard>
-      <FloatCard className="bottom-[4%] left-[6%]" delay={2.6} float={6}>
-        <div className="text-[11px] text-skip">Leave on the counter</div>
-        <div className="text-[14px] font-medium text-ink-2 line-through decoration-skip/50">Gulab jamun</div>
-      </FloatCard>
-    </div>
-  )
-}
-
-function FloatCard({ children, className, delay, float }: { children: ReactNode; className: string; delay: number; float: number }) {
-  return (
-    <motion.div
-      className={cx('absolute rounded-2xl border border-line bg-surface/90 px-3.5 py-2.5 shadow-[0_16px_40px_-18px_rgb(26_25_21/0.35)] backdrop-blur', className)}
-      initial={{ opacity: 0, y: 14, scale: 0.94 }}
-      animate={{ opacity: 1, y: [0, -float, 0], scale: 1 }}
-      transition={{
-        opacity: { delay, duration: 0.6 },
-        scale: { delay, duration: 0.6, ease: EASE },
-        y: { delay, duration: 5 + float / 3, repeat: Infinity, ease: 'easeInOut' },
-      }}
-    >
-      {children}
-    </motion.div>
   )
 }
 
@@ -240,7 +23,7 @@ function FloatCard({ children, className, delay, float }: { children: ReactNode;
 
 const STEP_COUNT = 5
 
-function Steps({ onExit }: { onExit: () => void }) {
+function Steps() {
   const setProfile = useStore((s) => s.setProfile)
   const updateSettings = useStore((s) => s.updateSettings)
   const apiKey = useStore((s) => s.settings.apiKey)
@@ -267,7 +50,7 @@ function Steps({ onExit }: { onExit: () => void }) {
 
   const go = (d: number) => {
     if (d > 0 && !valid) return
-    if (step === 0 && d < 0) return onExit()
+    if (step === 0 && d < 0) return
     setStep([step + d, d])
   }
 
@@ -281,7 +64,11 @@ function Steps({ onExit }: { onExit: () => void }) {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-5 pt-6 pb-8 sm:pt-10">
       <div className="mb-10 flex items-center gap-4">
-        <button onClick={() => go(-1)} aria-label="Back" className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-ink-2 transition hover:bg-surface-2">
+        <button
+          onClick={() => go(-1)}
+          aria-label="Back"
+          className={cx('grid size-10 shrink-0 cursor-pointer place-items-center rounded-full text-ink-2 transition hover:bg-surface-2', step === 0 && 'pointer-events-none opacity-0')}
+        >
           <ArrowLeft size={18} />
         </button>
         <div className="flex flex-1 gap-1.5">
@@ -310,7 +97,7 @@ function Steps({ onExit }: { onExit: () => void }) {
           >
             {step === 0 && (
               <>
-                <Eyebrow>01 — Hello</Eyebrow>
+                <Eyebrow>01 — Let’s set up your plate</Eyebrow>
                 <H>What should we call you?</H>
                 <input
                   className="display mt-10 w-full border-b border-line-strong bg-transparent pb-3 text-[40px] outline-none placeholder:text-ink-3/50 focus:border-accent-text sm:text-[48px]"

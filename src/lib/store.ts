@@ -44,6 +44,7 @@ interface State {
   addCraving: (c: Omit<CravingEntry, 'id' | 'at' | 'date'>) => void
   toggleSlip: (date: string) => void
   setWater: (date: string, n: number) => void
+  addWater: (date: string, delta: number) => void
   pushChat: (m: ChatMsg) => void
   patchLastChat: (text: string) => void
   patchChat: (at: number, patch: Partial<ChatMsg>) => void
@@ -124,6 +125,7 @@ export const useStore = create<State>()(
       toggleSlip: (date) =>
         set((s) => ({ slips: s.slips.includes(date) ? s.slips.filter((d) => d !== date) : [...s.slips, date] })),
       setWater: (date, n) => set((s) => ({ water: { ...s.water, [date]: Math.max(0, n) } })),
+      addWater: (date, delta) => set((s) => ({ water: { ...s.water, [date]: Math.max(0, (s.water[date] ?? 0) + delta) } })),
       pushChat: (m) => set((s) => ({ chat: [...s.chat, m].slice(-80) })),
       patchLastChat: (text) =>
         set((s) => {
