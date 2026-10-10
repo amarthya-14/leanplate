@@ -8,8 +8,8 @@ import { ACTIVITY, bmi, bmiBand, PACE, targets } from '../lib/nutrition'
 import { useStore } from '../lib/store'
 import type { Activity, Diet, Pace, Profile, Sex } from '../lib/types'
 
-export function Onboarding() {
-  const [started, setStarted] = useState(false)
+export function Onboarding({ skipWelcome = false }: { skipWelcome?: boolean }) {
+  const [started, setStarted] = useState(skipWelcome)
   return (
     <div className="relative min-h-dvh overflow-hidden bg-bg">
       <div className="ambient" />

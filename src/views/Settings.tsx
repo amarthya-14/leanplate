@@ -6,6 +6,8 @@ import { downloadIcs, enableNotifications, notificationsSupported, testNotificat
 import { findMenu } from '../lib/store'
 import { todayISO } from '../lib/date'
 import { toast } from '../components/Toast'
+import { cloudEnabled } from '../lib/supabase'
+import { setLocalMode, signOut, syncNow, useAuth } from '../lib/sync'
 import { ACTIVITY, PACE, targets } from '../lib/nutrition'
 import { currentKg, useStore } from '../lib/store'
 import type { Activity, Diet, Pace, Profile, Sex, Theme } from '../lib/types'
@@ -70,6 +72,8 @@ export function Settings() {
   return (
     <div className="max-w-3xl">
       <PageHeader eyebrow="Settings" title="Settings" />
+
+      {cloudEnabled && <AccountSection />}
 
       <Section title="You" desc="Changing these recalculates your targets.">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -303,5 +307,69 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean
     >
       <span className={`absolute top-1 left-1 size-5 rounded-full bg-white shadow transition-transform duration-300 ${on ? 'translate-x-5' : ''}`} />
     </button>
+  )
+}
+
+function AccountSection() {
+  const { user, sync, lastSynced, error } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const ago = lastSynced ? Math.max(0, Math.round((Date.now() - lastSynced) / 60000)) : null
+  if (!user)
+    return (
+      <Section title="Account" desc="You're using Leanplate on this device only.">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <p className="max-w-md text-[13.5px] text-ink-2">Sign in to back up your plate, logs and progress, and pick up on any device. What's on this device is merged into your account.</p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setLocalMode(false)
+              window.location.reload()
+            }}
+          >
+            Sign in or create account
+          </Button>
+        </div>
+      </Section>
+    )
+  return (
+    <Section title="Account">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="grid size-11 place-items-center rounded-full bg-accent text-[16px] font-medium text-accent-ink uppercase">{(user.email ?? '?')[0]}</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-medium">{user.email}</div>
+          <div className="mt-0.5 flex items-center gap-2 text-[12.5px] text-ink-3">
+            <SyncDot state={sync} />
+            {sync === 'syncing' ? 'Syncing…' : sync === 'error' ? `Sync failed — ${error}` : sync === 'offline' ? 'Offline — will sync when back online' : ago === null ? 'Synced' : ago < 1 ? 'Synced just now' : `Synced ${ago} min ago`}
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          <Button size="sm" variant="ghost" onClick={() => syncNow()}>
+            Sync now
+          </Button>
+          <Button
+            size="sm"
+            onClick={async () => {
+              setBusy(true)
+              await signOut()
+              setBusy(false)
+            }}
+            disabled={busy}
+          >
+            Sign out
+          </Button>
+        </div>
+      </div>
+    </Section>
+  )
+}
+
+export function SyncDot({ state }: { state: string }) {
+  const color = state === 'synced' ? 'var(--good)' : state === 'syncing' ? 'var(--gold)' : state === 'idle' ? 'var(--ink-3)' : 'var(--skip)'
+  return (
+    <span className="relative inline-flex size-2">
+      {state === 'syncing' && <span className="absolute inset-0 animate-ping rounded-full" style={{ background: color }} />}
+      <span className="relative size-2 rounded-full" style={{ background: color }} />
+    </span>
   )
 }

@@ -5,13 +5,16 @@ import { EASE } from './components/motion'
 import { Toaster } from './components/Toast'
 import { cx } from './components/ui'
 import { startReminderLoop } from './lib/reminders'
+import { cloudEnabled } from './lib/supabase'
+import { initSync, isLocalMode, useAuth } from './lib/sync'
+import { AuthPage } from './views/AuthPage'
 import { useStore } from './lib/store'
 import { Coach } from './views/Coach'
 import { Cravings } from './views/Cravings'
 import { MenuView } from './views/MenuView'
 import { Onboarding, Wordmark } from './views/Onboarding'
 import { Progress } from './views/Progress'
-import { Settings } from './views/Settings'
+import { Settings, SyncDot } from './views/Settings'
 import { Today } from './views/Today'
 
 type View = 'today' | 'menu' | 'progress' | 'cravings' | 'coach' | 'settings'
@@ -46,6 +49,12 @@ function useTheme() {
 export function App() {
   useTheme()
   const profile = useStore((s) => s.profile)
+  const auth = useAuth()
+  const [local, setLocal] = useState(isLocalMode)
+  useEffect(() => initSync(), [])
+  useEffect(() => {
+    if (auth.status === 'signedIn') setLocal(false)
+  }, [auth.status])
   const [view, setView] = useState<View>(readHash)
   const [coachPrompt, setCoachPrompt] = useState<string | undefined>()
 
@@ -63,10 +72,23 @@ export function App() {
     window.scrollTo({ top: 0 })
   }
 
-  if (!profile)
+  const gate = cloudEnabled
+    ? auth.status === 'loading' || (auth.status === 'signedIn' && !auth.ready)
+      ? 'splash'
+      : auth.status === 'signedOut' && !local
+        ? 'auth'
+        : null
+    : null
+
+  if (gate || !profile)
     return (
       <MotionConfig reducedMotion="user">
-        <Onboarding />
+        <AnimatePresence mode="wait">
+          <motion.div key={gate ?? 'onboarding'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, filter: 'blur(8px)' }} transition={{ duration: 0.5, ease: EASE }}>
+            {gate === 'splash' ? <Splash /> : gate === 'auth' ? <AuthPage onLocal={() => setLocal(true)} /> : <Onboarding skipWelcome={auth.status === 'signedIn'} />}
+          </motion.div>
+        </AnimatePresence>
+        <Toaster />
         <div className="grain" />
       </MotionConfig>
     )
@@ -98,7 +120,15 @@ export function App() {
           ))}
         </nav>
         <div className="mt-auto px-3 text-[12px] leading-relaxed text-ink-3">
-          {profile.name || 'You'} · {profile.goalKg} kg goal
+          <div className="text-ink-2">{profile.name || 'You'} · {profile.goalKg} kg goal</div>
+          {auth.user ? (
+            <button onClick={() => go('settings')} className="mt-1 flex cursor-pointer items-center gap-2 hover:text-ink-2">
+              <SyncDot state={auth.sync} />
+              <span className="max-w-[150px] truncate">{auth.sync === 'syncing' ? 'Syncing…' : auth.sync === 'synced' ? 'Synced' : auth.sync === 'offline' ? 'Offline' : auth.sync === 'error' ? 'Sync issue' : auth.user.email}</span>
+            </button>
+          ) : (
+            cloudEnabled && <div className="mt-1">On this device only</div>
+          )}
         </div>
       </aside>
 
@@ -151,5 +181,23 @@ export function App() {
     <Toaster />
     <div className="grain" />
     </MotionConfig>
+  )
+}
+
+function Splash() {
+  return (
+    <div className="grid min-h-dvh place-items-center bg-bg">
+      <div className="relative grid size-20 place-items-center">
+        <motion.span
+          className="absolute inset-0 rounded-full border border-accent-text/30"
+          animate={{ scale: [1, 1.5], opacity: [0.6, 0] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
+        />
+        <svg width="44" height="44" viewBox="0 0 64 64" aria-label="Loading">
+          <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" strokeWidth="5" />
+          <motion.path d="M32 6a26 26 0 0 1 26 26H32z" fill="var(--gold)" style={{ transformOrigin: '32px 32px' }} animate={{ rotate: 360 }} transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }} />
+        </svg>
+      </div>
+    </div>
   )
 }
