@@ -29,11 +29,13 @@ interface GenOpts {
   json?: boolean
   temperature?: number
   signal?: AbortSignal
+  tools?: unknown[]
 }
 
 function body(o: GenOpts) {
   return JSON.stringify({
     ...(o.system ? { systemInstruction: { parts: [{ text: o.system }] } } : {}),
+    ...(o.tools ? { tools: [{ functionDeclarations: o.tools }] } : {}),
     contents: o.turns.map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
     generationConfig: {
       temperature: o.temperature ?? 0.6,
@@ -56,7 +58,7 @@ async function explain(res: Response): Promise<GeminiError> {
   return new GeminiError(msg, res.status)
 }
 
-type Part = { text?: string; thought?: boolean }
+type Part = { text?: string; thought?: boolean; functionCall?: { name: string; args?: Record<string, unknown> } }
 const partsText = (parts: Part[] | undefined) =>
   (parts ?? [])
     .filter((p) => !p.thought)
@@ -112,6 +114,101 @@ export async function* stream(o: GenOpts): AsyncGenerator<string> {
     }
   }
 }
+
+export type StreamEvent = { type: 'text'; text: string } | { type: 'call'; name: string; args: Record<string, unknown> }
+
+/** Like stream(), but also surfaces function calls from tool-enabled chats. */
+export async function* streamEvents(o: GenOpts): AsyncGenerator<StreamEvent> {
+  if (!o.apiKey) throw new GeminiError('Add your Gemini API key in Settings first.')
+  const res = await fetch(`${BASE}/models/${o.model}:streamGenerateContent?alt=sse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': o.apiKey },
+    body: body(o),
+    signal: o.signal,
+  })
+  if (!res.ok || !res.body) throw await explain(res)
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let i: number
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim()
+      buf = buf.slice(i + 1)
+      if (!line.startsWith('data:')) continue
+      let j: { candidates?: { content?: { parts?: Part[] } }[] }
+      try {
+        j = JSON.parse(line.slice(5))
+      } catch {
+        continue
+      }
+      for (const p of j?.candidates?.[0]?.content?.parts ?? []) {
+        if (p.thought) continue
+        if (p.functionCall) yield { type: 'call', name: p.functionCall.name, args: p.functionCall.args ?? {} }
+        else if (p.text) yield { type: 'text', text: p.text }
+      }
+    }
+  }
+}
+
+const PICK_SCHEMA = {
+  type: 'object',
+  properties: {
+    item: { type: 'string', description: 'Dish name exactly as on the mess menu (or a canteen item)' },
+    portion: { type: 'string', description: 'Mess units: "3 pcs", "1 katori", "½ cup", "1 glass", "2 eggs"' },
+    kcal: { type: 'integer' },
+    protein: { type: 'integer', description: 'grams' },
+    note: { type: 'string', description: 'Optional, max 8 words' },
+  },
+  required: ['item', 'portion', 'kcal', 'protein'],
+}
+
+const MEAL_CHANGE = {
+  type: 'object',
+  properties: {
+    action: { type: 'string', enum: ['skip', 'replace'], description: 'skip = not eating this meal; replace = new full list of picks' },
+    picks: { type: 'array', items: PICK_SCHEMA, description: 'Required for replace: the COMPLETE new plate for this meal' },
+    tip: { type: 'string', description: 'One short line for this meal' },
+  },
+  required: ['action'],
+}
+
+export const COACH_TOOLS = [
+  {
+    name: 'propose_plan_change',
+    description:
+      "Propose an edit to the user's planned plate for a day (skip a meal, move protein to other meals, lighter dinner after overeating, eating out, etc.). The user sees a card and must confirm. Include ONLY the meals that change; for each changed meal give the complete new picks.",
+    parameters: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: '"today", "tomorrow", or YYYY-MM-DD' },
+        summary: { type: 'string', description: 'One line describing the change, e.g. "Skip breakfast, shift protein to lunch and dinner"' },
+        breakfast: MEAL_CHANGE,
+        lunch: MEAL_CHANGE,
+        snacks: MEAL_CHANGE,
+        dinner: MEAL_CHANGE,
+      },
+      required: ['date', 'summary'],
+    },
+  },
+  {
+    name: 'propose_log',
+    description: 'When the user says they ATE something (past tense) that is not logged yet, propose logging it. The user confirms on a card.',
+    parameters: {
+      type: 'object',
+      properties: {
+        meal: { type: 'string', enum: ['breakfast', 'lunch', 'snacks', 'dinner', 'extra'] },
+        label: { type: 'string', description: 'What they ate, short, e.g. "2 samosas + tea with sugar"' },
+        kcal: { type: 'integer' },
+        protein: { type: 'integer' },
+      },
+      required: ['meal', 'label', 'kcal', 'protein'],
+    },
+  },
+]
 
 export async function listModels(apiKey: string): Promise<string[]> {
   const res = await fetch(`${BASE}/models?pageSize=200`, { headers: { 'x-goog-api-key': apiKey } })
@@ -283,6 +380,12 @@ Style:
 - For sugar cravings: be practical — acknowledge, give a 2-minute action, a swap available in a hostel, and a reason that makes sense.
 - If the user slipped, no guilt; tell them exactly what to do for the next meal.
 - You are not a doctor; flag genuinely medical issues briefly.
+
+Taking action:
+- You can edit the user's plate with propose_plan_change. Use it whenever your advice changes WHAT or WHETHER they eat on a specific day — skipping or delaying a meal (sleep, class, travel), shifting protein to later meals, a lighter dinner after overeating, swapping an item. Give the complete new picks for each changed meal, using dishes from that day's menu, realistic kcal/protein, and keep the day close to their calorie and protein targets.
+- When you call it, keep your text short, explain the change in 1–2 lines, and END with a direct question like "Want me to update today's plate?" Never claim the plate is already changed — the user confirms.
+- If the user mentions eating something that isn't logged, call propose_log.
+- Don't call tools for general questions.
 
 USER PROFILE
 ${brief}

@@ -1,8 +1,7 @@
 import { daysInMonth, iso, todayISO, type Timings } from './date'
-import { planDay } from './foods'
-import { currentKg, dayMenuFor, useStore } from './store'
+import { currentPlanFor } from './planEdit'
+import { useStore } from './store'
 import { MEAL_LABEL, MEALS, type DayPlan, type MealKey, type MonthMenu } from './types'
-import { targets } from './nutrition'
 
 const DEFAULT: Record<MealKey, { start: number; end: number }> = {
   breakfast: { start: 7 * 60 + 15, end: 9 * 60 },
@@ -72,17 +71,7 @@ function markFired(k: string) {
   }
 }
 
-function planFor(date: string): { plan: DayPlan; timings?: Timings } | null {
-  const s = useStore.getState()
-  if (!s.profile) return null
-  const dm = dayMenuFor(s.menus, s.settings.sheetName, date)
-  if (!dm) return null
-  const cached = s.plans[`${date}|${dm.sheet}`]
-  if (cached) return { plan: cached, timings: dm.month.timings }
-  const t = targets(s.profile, currentKg(s.weights, s.profile))
-  const p = planDay(dm.menu, t.kcal, s.profile.diet, date)
-  return { plan: { date, sheet: dm.sheet, source: 'smart', createdAt: 0, ...p }, timings: dm.month.timings }
-}
+const planFor = currentPlanFor
 
 /** Checks every 30 s while the app is open; fires each meal once, at its start. */
 export function startReminderLoop() {
@@ -99,7 +88,7 @@ export function startReminderLoop() {
       const key = `${date}|${m}`
       const lead = s.settings.reminderLead ?? 0
       if (mins >= w.start - lead && mins < w.end && !fired()[key]) {
-        if (s.logs.some((l) => l.date === date && l.meal === m)) continue
+        if (s.logs.some((l) => l.date === date && l.meal === m) || p.plan.meals[m].skipped) continue
         const { title, body } = reminderText(p.plan, m)
         show(title, body, key)
         markFired(key)
@@ -141,6 +130,7 @@ export function buildMonthIcs(menu: MonthMenu, meals: MealKey[] = ['breakfast', 
     const p = planFor(date)
     if (!p) continue
     for (const m of meals) {
+      if (p.plan.meals[m].skipped) continue
       const w = windowFor(p.timings, m)
       const { title, body } = reminderText(p.plan, m)
       const dt = (mins: number) => `${menu.year}${pad(menu.month)}${pad(d)}T${pad(Math.floor(mins / 60))}${pad(mins % 60)}00`

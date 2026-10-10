@@ -64,6 +64,8 @@ export interface MealPlan {
   picks: PlanItem[]
   skip: SkipItem[]
   tip?: string
+  /** Meal intentionally skipped today (e.g. coach moved it) */
+  skipped?: boolean
 }
 
 export interface DayPlan {
@@ -73,6 +75,8 @@ export interface DayPlan {
   meals: Record<MealKey, MealPlan>
   summary: string
   createdAt: number
+  /** Set when the coach adjusted this day's plate */
+  edited?: { note: string; at: number; original?: DayPlan }
 }
 
 export interface LogEntry {
@@ -99,10 +103,42 @@ export interface CravingEntry {
   outcome: CravingOutcome
 }
 
+export interface MealChange {
+  action: 'skip' | 'replace'
+  picks?: PlanItem[]
+  tip?: string
+}
+
+export type ProposalStatus = 'pending' | 'applied' | 'dismissed'
+
+export type Proposal =
+  | {
+      kind: 'plan'
+      date: string
+      summary: string
+      meals: Partial<Record<MealKey, MealChange>>
+      status: ProposalStatus
+      /** plan before applying, for undo */
+      prev?: DayPlan | null
+      /** day totals before applying, for the card */
+      before?: { kcal: number; protein: number }
+    }
+  | {
+      kind: 'log'
+      date: string
+      meal: MealKey | 'extra'
+      label: string
+      kcal: number
+      protein: number
+      status: ProposalStatus
+      logId?: string
+    }
+
 export interface ChatMsg {
   role: 'user' | 'model'
   text: string
   at: number
+  proposal?: Proposal
 }
 
 export type Theme = 'system' | 'light' | 'dark'

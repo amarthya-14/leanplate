@@ -30,7 +30,7 @@ You can also put the key in a `.env` file (see `.env.example`).
 - **Canteen & room quick-add**: one tap to log tea, samosa, Maggi, eggs, chocolate and other common extras, with sugary items marked.
 - **Menu**: upload the month's Excel, switch between Veg/Non-Veg and Special, and browse any day with colour-coded dishes (good / small portion / skip).
 - **Cravings**: a guided 10-minute reset, hostel-friendly swaps, a streak calendar, and your craving patterns.
-- **Coach**: chat with Gemini about anything food-related.
+- **Coach**: chat with Gemini about anything food-related. When its advice changes what you should eat ("sleep in and skip breakfast", "lighter dinner after that lunch"), it attaches a **plate change** card showing the new picks and before/after calories and protein. Tap **Update my plate**, or just reply "yes", and Today's plate is rewritten (skipped meals marked, with undo and "Back to original plan"). Mention food you ate and it offers to log it.
 - **Progress**: a weekly review (days logged, average calories, on-target days, protein days, sugar-free days, weight change, and an optional Gemini debrief), weigh-ins, a 7-entry average trend, goal projection, and a 14-day calorie history.
 
 ## Menu format

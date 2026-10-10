@@ -98,7 +98,7 @@ export function nextMove(o: {
 
   for (const m of ['breakfast', 'lunch', 'dinner'] as MealKey[]) {
     const w = t(m)
-    if (mins < w.end && !loggedMeals.has(m)) {
+    if (mins < w.end && !loggedMeals.has(m) && !o.plan?.meals[m].skipped) {
       const picks = topPicks(o.plan, m)
       const kcal = o.plan?.meals[m].picks.reduce((s, p) => s + p.kcal, 0) ?? 0
       const trap = o.plan?.meals[m].skip.find((s) => /sugar|craving|fried/i.test(s.reason))

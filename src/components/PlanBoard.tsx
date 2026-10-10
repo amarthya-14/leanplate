@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Lightbulb, Plus, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
+import { Check, ChevronDown, Lightbulb, Plus, RefreshCw, Sparkles, Undo2, Wand2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { currentMeal, fmtTime, todayISO } from '../lib/date'
@@ -13,6 +13,8 @@ import { Button, cx, Pill, Spinner } from './ui'
 
 export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick?: () => void }) {
   const { dayMenu, plan, loading, error, generate, canAI } = useDayPlan(date)
+  const removePlan = useStore((s) => s.removePlan)
+  const savePlan = useStore((s) => s.savePlan)
   const isToday = date === todayISO()
   const now = currentMeal(dayMenu?.month.timings)
   const [open, setOpen] = useState<MealKey | null>(isToday ? now : 'breakfast')
@@ -53,6 +55,11 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
           ) : (
             <Pill>Offline engine</Pill>
           )}
+          {plan.edited && (
+            <Pill tone="gold">
+              <Wand2 size={12} /> Adjusted by coach
+            </Pill>
+          )}
           <span className="hidden text-[12px] text-ink-3 sm:inline">{dayMenu.sheet}</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -68,7 +75,21 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
         </div>
       </div>
 
-      {plan.summary && <p className="mb-5 max-w-2xl text-[15px] leading-relaxed text-ink-2">{plan.summary}</p>}
+      {plan.edited ? (
+        <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-gold/30 bg-[color-mix(in_oklab,var(--gold)_8%,transparent)] px-4 py-3 text-[14px]">
+          <span className="min-w-0 flex-1 text-ink-2">
+            <span className="font-medium text-ink">Coach update:</span> {plan.edited.note}
+          </span>
+          <button
+            onClick={() => (plan.edited?.original ? savePlan(plan.edited.original) : removePlan(`${date}|${dayMenu.sheet}`))}
+            className="flex cursor-pointer items-center gap-1.5 text-[13px] font-medium text-ink-3 transition hover:text-ink"
+          >
+            <Undo2 size={13} /> Back to original plan
+          </button>
+        </div>
+      ) : (
+        plan.summary && <p className="mb-5 max-w-2xl text-[15px] leading-relaxed text-ink-2">{plan.summary}</p>
+      )}
       {error && (
         <p className="mb-4 rounded-xl bg-skip-soft px-4 py-3 text-[13px] text-skip">
           {error} {plan.source === 'smart' && 'Showing the offline plan.'}
@@ -148,12 +169,13 @@ function MealCard({
   }
 
   return (
-    <article className={cx('card overflow-hidden transition-shadow duration-300', isNow && 'ring-1 ring-accent-text/40', !open && 'card-hover')}>
+    <article className={cx('card overflow-hidden transition-shadow duration-300', isNow && !plan.skipped && 'ring-1 ring-accent-text/40', !open && 'card-hover', plan.skipped && 'opacity-70')}>
       <button onClick={onToggle} className="flex w-full cursor-pointer items-center gap-4 px-5 py-4 text-left sm:px-6">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-[16px] font-semibold tracking-tight">{MEAL_LABEL[meal]}</h3>
-            {isNow && <Pill tone="accent">Up next</Pill>}
+            {plan.skipped && <Pill tone="skip">Skipped today</Pill>}
+            {isNow && !plan.skipped && <Pill tone="accent">Up next</Pill>}
             {logged.length > 0 && (
               <Pill tone="neutral">
                 <Check size={11} /> Logged
@@ -162,7 +184,7 @@ function MealCard({
           </div>
           <div className="mt-0.5 truncate text-[13px] text-ink-3">
             {time && `${fmtTime(time.start)} – ${fmtTime(time.end)} · `}
-            {empty ? 'Nothing listed' : `${plan.picks.length} to take · ${plan.skip.length} to skip`}
+            {empty ? 'Nothing listed' : plan.skipped ? 'Coach moved this meal' : `${plan.picks.length} to take · ${plan.skip.length} to skip`}
           </div>
         </div>
         <div className="text-right">

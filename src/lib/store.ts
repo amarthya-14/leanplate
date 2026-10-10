@@ -35,6 +35,7 @@ interface State {
   addMenu: (m: MonthMenu) => void
   removeMenu: (id: string) => void
   savePlan: (p: DayPlan) => void
+  removePlan: (key: string) => void
   clearPlans: () => void
   addLog: (l: Omit<LogEntry, 'id' | 'at'>) => string
   removeLog: (id: string) => void
@@ -45,6 +46,7 @@ interface State {
   setWater: (date: string, n: number) => void
   pushChat: (m: ChatMsg) => void
   patchLastChat: (text: string) => void
+  patchChat: (at: number, patch: Partial<ChatMsg>) => void
   clearChat: () => void
   importAll: (data: Partial<State>) => void
   reset: () => void
@@ -94,6 +96,12 @@ export const useStore = create<State>()(
         })),
       removeMenu: (id) => set((s) => ({ menus: s.menus.filter((m) => m.id !== id) })),
       savePlan: (p) => set((s) => ({ plans: { ...s.plans, [`${p.date}|${p.sheet}`]: p } })),
+      removePlan: (key) =>
+        set((s) => {
+          const plans = { ...s.plans }
+          delete plans[key]
+          return { plans }
+        }),
       clearPlans: () => set({ plans: {} }),
       addLog: (l) => {
         const id = uid()
@@ -123,6 +131,7 @@ export const useStore = create<State>()(
           chat[chat.length - 1] = { ...chat[chat.length - 1], text }
           return { chat }
         }),
+      patchChat: (at, patch) => set((s) => ({ chat: s.chat.map((m) => (m.at === at ? { ...m, ...patch } : m)) })),
       clearChat: () => set({ chat: [] }),
       importAll: (data) => set((s) => ({ ...s, ...data })),
       reset: () => set({ ...initial, settings: { ...initialSettings } }),
