@@ -26,6 +26,8 @@ You can also put the key in a `.env` file (see `.env.example`).
 ## Screens
 
 - **Today**: a "Next move" card that changes with the time of day (meal coming up, craving window, protein gap, weigh-in, kitchen closed), plus calories left, protein, water, sugar-free streak, weight, and the plate for each meal. Untick what you didn't take, then tap "Ate this" to log it; every log can be undone.
+- **Swap a dish**: tap ⇄ next to anything on the plate to see what on that meal's menu can take its place. Protein swaps for protein (dal counts), carbs for carbs, veg for veg. Portions are sized to similar calories, and each option shows the calorie and protein difference. Like-for-like swaps come first; sugary, fried or much heavier ones are listed separately as "Not great swaps".
+- **Skip or miss a meal**: "Skip meal" (or "I missed it" once the mess has closed) marks the meal as skipped. You can just skip it, or also add a protein dish from your next main meal's menu so your protein stays on track. "Eating it after all" undoes it, and every change has an Undo.
 - **Meal reminders**: a notification when the mess opens with what to take and what to skip (works while the app is open or in the background), and **Add month to calendar**, which exports every meal as calendar alerts that fire even when the app is closed.
 - **Canteen & room quick-add**: one tap to log tea, samosa, Maggi, eggs, chocolate and other common extras, with sugary items marked.
 - **Menu**: upload the month's Excel, switch between Veg/Non-Veg and Special, and browse any day with colour-coded dishes (good / small portion / skip).
@@ -43,6 +45,10 @@ Built for the VIT-AP style sheet: a `Day`/`Dates` column ("Thu 1, 15, 29") with 
 - `.xlsx` and `.csv` (re-save old `.xls` files as `.xlsx`)
 
 If a sheet doesn't match this format, Gemini can read it instead.
+
+## Cloud sync
+
+Sign-in and sync use a free Supabase project. Supabase pauses free projects after about a week without activity, and the app then says it can't reach the server. To prevent that, Vercel calls `api/keepalive.js` once a day (`vercel.json`). If the project was paused anyway, restore it from the Supabase dashboard. Everything on the device keeps working in the meantime.
 
 ## Data
 

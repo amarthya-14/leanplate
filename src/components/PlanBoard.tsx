@@ -1,10 +1,11 @@
-import { Check, ChevronDown, Lightbulb, Plus, RefreshCw, Sparkles, Undo2, Wand2 } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronDown, Lightbulb, Plus, RefreshCw, Sparkles, Undo2, Wand2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
-import { currentMeal, fmtTime, todayISO } from '../lib/date'
-import { mealTotals } from '../lib/foods'
-import { useStore } from '../lib/store'
-import { MEAL_LABEL, MEALS, type MealKey, type MealPlan } from '../lib/types'
+import { currentMeal, fmtTime, mealOver, todayISO } from '../lib/date'
+import { mealTotals, swapOptions } from '../lib/foods'
+import { skipMeal, swapPick, topUpAfter, unskipMeal } from '../lib/planEdit'
+import { useStore, useTargets } from '../lib/store'
+import { MEAL_LABEL, MEALS, type DayPlan, type MealKey, type MealPlan, type PlanItem } from '../lib/types'
 import { useDayPlan } from '../lib/usePlan'
 import { LogFoodSheet } from './LogFoodSheet'
 import { EASE } from './motion'
@@ -19,6 +20,9 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
   const now = currentMeal(dayMenu?.month.timings)
   const [open, setOpen] = useState<MealKey | null>(isToday ? now : 'breakfast')
   const [logFor, setLogFor] = useState<MealKey | 'extra' | null>(null)
+  const profile = useStore((s) => s.profile)
+  const logs = useStore((s) => s.logs)
+  const t = useTargets()
 
   if (!dayMenu || !plan) {
     return (
@@ -43,6 +47,30 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
     )
   }
 
+  const key = `${date}|${dayMenu.sheet}`
+  const diet = profile?.diet ?? 'veg'
+  const loggedMeals = new Set(logs.filter((l) => l.date === date).map((l) => l.meal as MealKey))
+  const current = plan
+
+  /** Save a change to the plate, with an undo that restores exactly what was there. */
+  function change(next: DayPlan, message: string) {
+    const wasSaved = !!useStore.getState().plans[key]
+    savePlan(next)
+    toast(message, { label: 'Undo', run: () => (wasSaved ? savePlan(current) : removePlan(key)) })
+  }
+
+  const actions: MealActions = {
+    swapOptions: (meal, i) =>
+      swapOptions(current.meals[meal].picks[i], dayMenu.menu[meal] ?? [], diet, current.meals[meal].picks.map((p) => p.item)),
+    swap: (meal, i, item) => change(swapPick(current, meal, i, item), `Swapped in ${item.item}`),
+    topUp: (meal) => (t ? topUpAfter(current, meal, dayMenu.menu, diet, t.kcal, loggedMeals) : null),
+    skip: (meal, withTopUp) => {
+      const top = withTopUp && t ? topUpAfter(current, meal, dayMenu.menu, diet, t.kcal, loggedMeals) : null
+      change(skipMeal(current, meal, top), top ? `${MEAL_LABEL[meal]} skipped · ${top.item.item} added to ${MEAL_LABEL[top.meal].toLowerCase()}` : `${MEAL_LABEL[meal]} skipped`)
+    },
+    unskip: (meal) => change(unskipMeal(current, meal), `${MEAL_LABEL[meal]} is back on the plan`),
+  }
+
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -57,7 +85,7 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
           )}
           {plan.edited && (
             <Pill tone="gold">
-              <Wand2 size={12} /> Adjusted by coach
+              <Wand2 size={12} /> Adjusted
             </Pill>
           )}
           <span className="hidden text-[12px] text-ink-3 sm:inline">{dayMenu.sheet}</span>
@@ -78,10 +106,10 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
       {plan.edited ? (
         <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-gold/30 bg-[color-mix(in_oklab,var(--gold)_8%,transparent)] px-4 py-3 text-[14px]">
           <span className="min-w-0 flex-1 text-ink-2">
-            <span className="font-medium text-ink">Coach update:</span> {plan.edited.note}
+            <span className="font-medium text-ink">Changed today:</span> {plan.edited.note}
           </span>
           <button
-            onClick={() => (plan.edited?.original ? savePlan(plan.edited.original) : removePlan(`${date}|${dayMenu.sheet}`))}
+            onClick={() => (plan.edited?.original && plan.edited.original.source !== 'smart' ? savePlan(plan.edited.original) : removePlan(key))}
             className="flex cursor-pointer items-center gap-1.5 text-[13px] font-medium text-ink-3 transition hover:text-ink"
           >
             <Undo2 size={13} /> Back to original plan
@@ -114,12 +142,22 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
             onLogOther={() => setLogFor(m)}
             time={dayMenu.month.timings?.[m]}
             raw={dayMenu.menu[m]}
+            actions={actions}
+            over={isToday && mealOver(m, dayMenu.month.timings)}
           />
         ))}
       </div>
       <LogFoodSheet open={!!logFor} onClose={() => setLogFor(null)} date={date} meal={logFor ?? undefined} />
     </section>
   )
+}
+
+interface MealActions {
+  swapOptions: (meal: MealKey, index: number) => ReturnType<typeof swapOptions>
+  swap: (meal: MealKey, index: number, item: PlanItem) => void
+  topUp: (meal: MealKey) => { meal: MealKey; item: PlanItem } | null
+  skip: (meal: MealKey, withTopUp: boolean) => void
+  unskip: (meal: MealKey) => void
 }
 
 function MealCard({
@@ -132,6 +170,8 @@ function MealCard({
   onLogOther,
   time,
   raw,
+  actions,
+  over,
 }: {
   meal: MealKey
   plan: MealPlan
@@ -142,12 +182,18 @@ function MealCard({
   onLogOther: () => void
   time?: { start: number; end: number }
   raw: string[]
+  actions: MealActions
+  /** today's serving window has closed */
+  over: boolean
 }) {
   const logs = useStore((s) => s.logs)
   const addLog = useStore((s) => s.addLog)
   const removeLog = useStore((s) => s.removeLog)
   const [off, setOff] = useState<Set<number>>(new Set())
   const [showSkip, setShowSkip] = useState(false)
+  const [swapping, setSwapping] = useState<number | null>(null)
+  const [confirmSkip, setConfirmSkip] = useState(false)
+  const topUp = confirmSkip ? actions.topUp(meal) : null
   const totals = mealTotals(plan)
   const logged = useMemo(() => logs.filter((l) => l.date === date && l.meal === meal), [logs, date, meal])
   const loggedKcal = logged.reduce((s, l) => s + l.kcal, 0)
@@ -184,7 +230,7 @@ function MealCard({
           </div>
           <div className="mt-0.5 truncate text-[13px] text-ink-3">
             {time && `${fmtTime(time.start)} – ${fmtTime(time.end)} · `}
-            {empty ? 'Nothing listed' : plan.skipped ? 'Coach moved this meal' : `${plan.picks.length} to take · ${plan.skip.length} to skip`}
+            {empty ? 'Nothing listed' : plan.skipped ? 'Not eating this one today' : `${plan.picks.length} to take · ${plan.skip.length} to skip`}
           </div>
         </div>
         <div className="text-right">
@@ -209,12 +255,13 @@ function MealCard({
               const disabled = off.has(i)
               return (
                 <motion.li
-                  key={i}
-                  className="flex items-start gap-3 py-2.5"
+                  key={`${i}-${p.item}`}
+                  className="py-2.5"
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.05 + i * 0.035, duration: 0.35, ease: EASE }}
                 >
+                  <div className="flex items-start gap-3">
                   <button
                     aria-label={disabled ? `Include ${p.item}` : `Exclude ${p.item}`}
                     onClick={() => {
@@ -248,6 +295,32 @@ function MealCard({
                     {p.kcal}
                     <span className="ml-2 hidden text-ink-3/70 sm:inline">{p.protein}g</span>
                   </div>
+                  {!logged.length && (
+                    <button
+                      aria-label={`Swap ${p.item}`}
+                      aria-expanded={swapping === i}
+                      onClick={() => setSwapping(swapping === i ? null : i)}
+                      className={cx(
+                        '-my-1 grid size-8 shrink-0 cursor-pointer place-items-center rounded-full transition',
+                        swapping === i ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:bg-surface-2 hover:text-ink',
+                      )}
+                    >
+                      <ArrowLeftRight size={14} />
+                    </button>
+                  )}
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {swapping === i && (
+                      <SwapList
+                        item={p}
+                        options={actions.swapOptions(meal, i)}
+                        onPick={(o) => {
+                          actions.swap(meal, i, o)
+                          setSwapping(null)
+                        }}
+                      />
+                    )}
+                  </AnimatePresence>
                 </motion.li>
               )
             })}
@@ -281,17 +354,54 @@ function MealCard({
             </div>
           )}
 
+          {plan.skipped ? (
+            <div className="mt-4 flex justify-end">
+              <Button size="sm" variant="ghost" onClick={() => actions.unskip(meal)}>
+                <Undo2 size={14} /> Eating it after all
+              </Button>
+            </div>
+          ) : confirmSkip ? (
+            <div className="mt-4 rounded-xl border border-line px-4 py-3">
+              <p className="text-[14px] text-ink-2">
+                {over ? `Missed ${MEAL_LABEL[meal].toLowerCase()}?` : `Skip ${MEAL_LABEL[meal].toLowerCase()} today?`}{' '}
+                {topUp ? (
+                  <>
+                    You can add <span className="font-medium text-ink">{topUp.item.item}</span> ({topUp.item.portion}, {topUp.item.protein} g protein) to{' '}
+                    {MEAL_LABEL[topUp.meal].toLowerCase()} so your protein stays on track.
+                  </>
+                ) : (
+                  'Make protein the first thing on your next plate.'
+                )}
+              </p>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setConfirmSkip(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" variant={topUp ? 'secondary' : 'primary'} onClick={() => (setConfirmSkip(false), actions.skip(meal, false))}>
+                  Just skip
+                </Button>
+                {topUp && (
+                  <Button size="sm" variant="primary" onClick={() => (setConfirmSkip(false), actions.skip(meal, true))}>
+                    Skip + extra protein
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="num text-[13px] text-ink-3">
               {chosenK} kcal · {chosenP} g protein
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               {logged.length ? (
                 <Button size="sm" variant="ghost" onClick={() => logged.forEach((l) => removeLog(l.id))}>
                   <Undo2 size={14} /> Undo log
                 </Button>
               ) : (
                 <>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirmSkip(true)}>
+                    {over ? 'I missed it' : 'Skip meal'}
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={onLogOther}>
                     Ate something else
                   </Button>
@@ -302,10 +412,59 @@ function MealCard({
               )}
             </div>
           </div>
+          )}
         </div>
         </motion.div>
       )}
       </AnimatePresence>
     </article>
+  )
+}
+
+function SwapList({ item, options, onPick }: { item: PlanItem; options: ReturnType<typeof swapOptions>; onPick: (p: PlanItem) => void }) {
+  const [showOthers, setShowOthers] = useState(false)
+  const good = options.filter((o) => o.ok)
+  const others = options.filter((o) => !o.ok)
+  const row = (o: (typeof options)[number]) => (
+    <li key={o.pick.item}>
+      <button
+        onClick={() => onPick(o.pick)}
+        className="flex w-full cursor-pointer items-start gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-surface"
+      >
+        <span className="min-w-0 flex-1 text-[14px] leading-snug">
+          {o.pick.item}
+          <span className="ml-2 text-[12.5px] font-medium text-accent-text">{o.pick.portion}</span>
+          <span className={cx('mt-0.5 block text-[12px]', o.ok ? 'text-ink-3' : 'text-skip')}>{o.why}</span>
+        </span>
+        <span className="num pt-0.5 text-[12.5px] text-ink-3">{o.pick.kcal}</span>
+      </button>
+    </li>
+  )
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.3, ease: EASE }}
+      className="overflow-hidden"
+    >
+      <div className="mt-2 ml-8 rounded-xl bg-surface-2 p-1.5">
+        <div className="px-2.5 pt-1.5 pb-1 text-[12px] text-ink-3">Instead of {item.item}, from today's menu</div>
+        {good.length ? (
+          <ul>{good.map(row)}</ul>
+        ) : (
+          <p className="px-2.5 py-2 text-[13px] text-ink-2">Nothing on today's menu is a like-for-like swap for this.</p>
+        )}
+        {others.length > 0 && (
+          <div className="px-2.5 pt-1 pb-1.5">
+            <button onClick={() => setShowOthers(!showOthers)} className="flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-ink-3 hover:text-ink">
+              Not great swaps ({others.length})
+              <ChevronDown size={13} className={cx('transition', showOthers && 'rotate-180')} />
+            </button>
+          </div>
+        )}
+        {showOthers && <ul>{others.map(row)}</ul>}
+      </div>
+    </motion.div>
   )
 }

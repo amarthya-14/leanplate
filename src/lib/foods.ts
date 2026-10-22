@@ -68,9 +68,9 @@ export const FOODS: Food[] = [
   F(/pickle|avakaya|avakai|achar|thokku|uragaya/i, 'condiment', 30, 0, 'tsp', 2, { why: 'Mostly oil and salt — water retention' }),
   F(/coconut .*chutney|chutney.*coconut/i, 'condiment', 60, 1, 'tbsp', 4),
   F(/chutney|pachadi|thogayal|thuvaiyal|raita? chutney/i, 'condiment', 45, 1, 'tbsp', 5),
-  F(/podi|karam|gun ?powder/i, 'condiment', 45, 2, 'tsp', 2, { why: 'Podi is always eaten with ghee — ~100 kcal per spoon' }),
-  F(/\bghee\b/i, 'condiment', 45, 0, 'tsp', 1, { why: 'Pure fat, ~45 kcal a spoon' }),
-  F(/\bbutter\b(?! ?milk)/i, 'condiment', 36, 0, 'tsp', 1, { why: 'Pure fat' }),
+  F(/\bpodi\b(?! ?(dosa|idl|uttap))|\bkaram\b(?! ?dosa)|gun ?powder/i, 'condiment', 45, 2, 'tsp', 2, { why: 'Podi is always eaten with ghee — ~100 kcal per spoon' }),
+  F(/^\W*ghee\W*$/i, 'condiment', 45, 0, 'tsp', 1, { why: 'Pure fat, ~45 kcal a spoon' }),
+  F(/^\W*(amul |salted )?butter\W*$/i, 'condiment', 36, 0, 'tsp', 1, { why: 'Pure fat' }),
   F(/\bjam\b/i, 'sweet', 50, 0, 'tbsp', 0, { why: 'Basically sugar syrup' }),
   F(/sauce|ketchup|mayo/i, 'condiment', 20, 0, 'tbsp', 2, { why: 'Ketchup is ~25% sugar' }),
   F(/papad|appalam|fryums|vadiyalu|vadam|onion rings|golden fingers/i, 'fried', 90, 1, 'pc', 1, { why: 'Deep-fried filler, zero fullness' }),
@@ -205,14 +205,19 @@ export interface Atom {
   food: Food
 }
 
+/** "Chicken curry / Paneer curry" → both choices; "Puri/Bhaji" stays one dish. */
+function alternatives(part: string) {
+  const hasAlt = / \/ |\/ | \/|\//.test(part) && (/ \/|\/ /.test(part) || MEAT.test(part) || EGG.test(part) || VEG_TAG.test(part))
+  return hasAlt ? part.split('/').map((a) => a.trim()).filter(Boolean) : [part]
+}
+
+const dishParts = (line: string) => splitTopLevel(line).flatMap((p) => splitTopLevel(p, '+'))
+
 /** Break a menu line into individual dishes, applying diet and picking the best alternative. */
 export function atomize(line: string, diet: Diet): Atom[] {
-  const parts = splitTopLevel(line).flatMap((p) => splitTopLevel(p, '+'))
   const out: Atom[] = []
-  for (const part of parts) {
-    const hasAlt = / \/ |\/ | \/|\//.test(part) && (/ \/|\/ /.test(part) || MEAT.test(part) || EGG.test(part) || VEG_TAG.test(part))
-    const alts = hasAlt ? part.split('/').map((a) => a.trim()).filter(Boolean) : [part]
-    const ok = alts.filter((a) => allowed(a, diet))
+  for (const part of dishParts(line)) {
+    const ok = alternatives(part).filter((a) => allowed(a, diet))
     if (!ok.length) continue
     const ranked = ok
       .map((a) => ({ label: clean(a), food: classify(a) }))
@@ -399,6 +404,76 @@ export function planDay(menu: DayMenu, kcal: number, diet: Diet, seed = '') {
     `About ${Math.round(tk / 10) * 10} kcal and ${tp} g protein if you stick to this.` +
     (traps.length ? ` Watch out for ${traps.slice(0, 2).join(' and ')}.` : ' No big sugar traps on the menu today.')
   return { meals, summary }
+}
+
+// ── Swaps ───────────────────────────────────────────────────────────
+// What a dish does on the plate. A swap should fill the same role: dal for paneer, roti for rice.
+type Role = 'protein' | 'carb' | 'veg' | 'dairy' | 'fruit' | 'drink' | 'side'
+const ROLE: Record<Kind, Role> = {
+  protein: 'protein', dal: 'protein', dairy: 'dairy', veg: 'veg', salad: 'veg', soup: 'veg', carb: 'carb', fried: 'carb',
+  refined: 'carb', fruit: 'fruit', sweet: 'fruit', drink: 'drink', condiment: 'side', unknown: 'side',
+}
+
+/** Every dish on these menu lines that the diet allows, including both sides of "A / B" choices. */
+export function menuAtoms(lines: string[], diet: Diet): Atom[] {
+  const seen = new Set<string>()
+  const out: Atom[] = []
+  for (const line of lines)
+    for (const part of dishParts(line))
+      for (const alt of alternatives(part)) {
+        const label = clean(alt)
+        if (!label || !allowed(alt, diet) || seen.has(label.toLowerCase())) continue
+        seen.add(label.toLowerCase())
+        out.push({ label, food: classify(alt) })
+      }
+  return out
+}
+
+/** The portion of `f` closest to `kcal`, in steps that make sense for its unit. */
+function portionFor(f: Food, kcal: number) {
+  const step = f.step ?? (['pc', 'slice', 'egg'].includes(f.unit) ? 1 : 0.5)
+  const qty = Math.round(kcal / f.kcal / step) * step
+  return Math.max(step, Math.min(f.max ?? 3, qty))
+}
+
+export interface SwapOption {
+  pick: PlanItem
+  /** a like-for-like swap: not sugary/fried, not many more calories, not much less protein */
+  ok: boolean
+  /** e.g. "−40 kcal · +3 g protein", or why it isn't a good swap */
+  why: string
+}
+
+/** Dishes from the same meal's menu that can take `current`'s place on the plate. */
+export function swapOptions(current: PlanItem, lines: string[], diet: Diet, onPlate: string[]): SwapOption[] {
+  const role = ROLE[classify(current.item).kind]
+  const taken = new Set(onPlate.map((x) => x.toLowerCase()))
+  return menuAtoms(lines, diet)
+    .filter((a) => ROLE[a.food.kind] === role && !taken.has(a.label.toLowerCase()))
+    .map((a) => {
+      const v = verdict(a.food)
+      const p = pick(a, portionFor(a.food, current.kcal), v === 'limit' ? 'Keep it to this portion' : undefined)
+      const dk = p.kcal - current.kcal
+      const dp = p.protein - current.protein
+      const delta = [dk ? `${dk > 0 ? '+' : '−'}${Math.abs(dk)} kcal` : 'same kcal', dp ? `${dp > 0 ? '+' : '−'}${Math.abs(dp)} g protein` : '']
+        .filter(Boolean)
+        .join(' · ')
+      const tooMuch = dk > Math.max(60, current.kcal * 0.25)
+      const lessProtein = dp < -(role === 'protein' ? 3 : 5)
+      if (v === 'skip') return { pick: p, ok: false, why: a.food.why ?? `${a.food.kind === 'sweet' ? 'Sugary' : 'Fried or refined'} — ${delta}` }
+      // "Limit" foods (butter, papad, parotta) are fine in small amounts but never a like-for-like swap
+      return { pick: p, ok: v === 'good' && !tooMuch && !lessProtein, why: v === 'limit' ? `${a.food.why ?? 'Only a small portion'} — ${delta}` : delta }
+    })
+    .sort((x, y) => Number(y.ok) - Number(x.ok) || y.pick.protein - x.pick.protein || x.pick.kcal - y.pick.kcal)
+}
+
+/** When a meal is skipped: a protein dish to add to the next main meal, from that meal's menu. */
+export function proteinTopUp(lines: string[], diet: Diet, onPlate: string[], kcal: number): PlanItem | null {
+  const taken = new Set(onPlate.map((x) => x.toLowerCase()))
+  const best = menuAtoms(lines, diet)
+    .filter((a) => ['protein', 'dal', 'dairy'].includes(a.food.kind) && verdict(a.food) === 'good' && !taken.has(a.label.toLowerCase()))
+    .sort((x, y) => y.food.protein / y.food.kcal - x.food.protein / x.food.kcal)[0]
+  return best ? pick(best, Math.min(portionFor(best.food, kcal), best.food.max ?? 2)) : null
 }
 
 export function mealTotals(p: MealPlan) {

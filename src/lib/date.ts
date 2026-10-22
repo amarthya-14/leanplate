@@ -32,6 +32,11 @@ export function greeting(d = new Date()) {
 export type Timings = Partial<Record<MealKey, { start: number; end: number }>>
 const DEFAULT_END: Record<MealKey, number> = { breakfast: 10 * 60, lunch: 15 * 60, snacks: 18 * 60 + 30, dinner: 24 * 60 }
 
+/** True once today's serving window for `meal` has closed. */
+export function mealOver(meal: MealKey, timings: Timings = {}, d = new Date()) {
+  return d.getHours() * 60 + d.getMinutes() > (timings[meal]?.end ?? DEFAULT_END[meal])
+}
+
 /** Which meal is "now" or next up, using the mess timings when the sheet has them. */
 export function currentMeal(timings: Timings = {}, d = new Date()): MealKey {
   const mins = d.getHours() * 60 + d.getMinutes()

@@ -1,8 +1,8 @@
 import { addDays, todayISO, type Timings } from './date'
-import { planDay } from './foods'
-import { targets } from './nutrition'
+import { planDay, proteinTopUp } from './foods'
+import { MEAL_SHARE, targets } from './nutrition'
 import { currentKg, dayMenuFor, useStore } from './store'
-import { MEALS, type DayPlan, type MealChange, type MealKey, type MealPlan, type PlanItem, type Proposal } from './types'
+import { MEAL_LABEL, MEALS, type DayMenu, type DayPlan, type Diet, type MealChange, type MealKey, type MealPlan, type PlanItem, type Proposal } from './types'
 
 export function resolveDate(d: unknown): string {
   const s = String(d ?? 'today').toLowerCase().trim()
@@ -77,6 +77,70 @@ export function applyPlanChange(base: DayPlan, p: Extract<Proposal, { kind: 'pla
   const original = base.edited?.original ?? (base.source === 'ai' ? base : undefined)
   const note = base.edited ? `${base.edited.note}; ${p.summary}` : p.summary
   return { ...base, meals, edited: { note, at: Date.now(), original }, createdAt: Date.now() }
+}
+
+/** Record a change made from the plate itself, keeping the first version for "Back to original plan". */
+function edited(base: DayPlan, meals: Record<MealKey, MealPlan>, note: string): DayPlan {
+  return {
+    ...base,
+    meals,
+    edited: { note: base.edited ? `${base.edited.note}; ${note}` : note, at: Date.now(), original: base.edited?.original ?? base },
+    createdAt: Date.now(),
+  }
+}
+
+export function swapPick(base: DayPlan, meal: MealKey, index: number, next: PlanItem): DayPlan {
+  const old = base.meals[meal]
+  const out = old.picks[index]
+  const picks = old.picks.map((p, i) => (i === index ? { ...next, note: next.note ?? `Instead of ${out.item}` } : p))
+  const skip = [{ item: out.item, reason: `Swapped for ${next.item}` }, ...old.skip.filter((x) => x.item.toLowerCase() !== next.item.toLowerCase())]
+  return edited(base, { ...base.meals, [meal]: { ...old, picks, skip } }, `${out.item} → ${next.item}`)
+}
+
+const TOP_UP = (meal: MealKey) => `Extra protein, since you skipped ${MEAL_LABEL[meal].toLowerCase()}`
+
+/** The next main meal that can take extra protein after skipping `meal`, and what to add there. */
+export function topUpAfter(plan: DayPlan, meal: MealKey, menu: DayMenu, diet: Diet, dayKcal: number, logged: Set<MealKey>) {
+  const later = MEALS.slice(MEALS.indexOf(meal) + 1).filter((m) => !plan.meals[m].skipped && !logged.has(m) && menu[m]?.length)
+  const target = later.find((m) => m !== 'snacks')
+  if (!target) return null
+  // Make up about half the skipped meal's calories, as protein; the rest stays as a bigger deficit.
+  const item = proteinTopUp(menu[target], diet, plan.meals[target].picks.map((p) => p.item), dayKcal * MEAL_SHARE[meal] * 0.5)
+  return item ? { meal: target, item: { ...item, note: TOP_UP(meal) } } : null
+}
+
+export function skipMeal(base: DayPlan, meal: MealKey, topUp: { meal: MealKey; item: PlanItem } | null): DayPlan {
+  const old = base.meals[meal]
+  const meals = { ...base.meals }
+  meals[meal] = {
+    picks: [],
+    skip: [...old.picks.map((x) => ({ item: x.item, reason: 'Skipped today' })), ...old.skip],
+    tip: topUp
+      ? `Skipped. ${MEAL_LABEL[topUp.meal]} gets ${topUp.item.item} so your protein stays on track.`
+      : 'Skipped. That is a bigger deficit today; make protein the first thing on your next plate.',
+    skipped: true,
+  }
+  if (topUp) {
+    const t = meals[topUp.meal]
+    const name = topUp.item.item.toLowerCase()
+    meals[topUp.meal] = { ...t, picks: [...t.picks, topUp.item], skip: t.skip.filter((x) => x.item.toLowerCase() !== name) }
+  }
+  return edited(base, meals, `skipped ${MEAL_LABEL[meal].toLowerCase()}`)
+}
+
+/** Bring a skipped meal back, and take back the protein added elsewhere because of it. */
+export function unskipMeal(base: DayPlan, meal: MealKey): DayPlan {
+  const original = base.edited?.original?.meals[meal]
+  const meals = { ...base.meals }
+  for (const m of MEALS) {
+    const added = meals[m].picks.filter((p) => p.note === TOP_UP(meal)).map((p) => p.item.toLowerCase())
+    if (!added.length) continue
+    // Put it back on the counter list if that's where it was before
+    const was = base.edited?.original?.meals[m].skip.filter((x) => added.includes(x.item.toLowerCase())) ?? []
+    meals[m] = { ...meals[m], picks: meals[m].picks.filter((p) => p.note !== TOP_UP(meal)), skip: [...meals[m].skip, ...was] }
+  }
+  meals[meal] = original && !original.skipped ? original : { ...meals[meal], skipped: false }
+  return edited(base, meals, `${MEAL_LABEL[meal].toLowerCase()} back on`)
 }
 
 export function planTotals(meals: Record<MealKey, MealPlan>) {
