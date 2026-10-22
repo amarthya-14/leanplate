@@ -476,6 +476,15 @@ export function proteinTopUp(lines: string[], diet: Diet, onPlate: string[], kca
   return best ? pick(best, Math.min(portionFor(best.food, kcal), best.food.max ?? 2)) : null
 }
 
+/** A normal portion of any dish, for when you decide to have something the plan left out. */
+export function planItemFor(name: string): PlanItem {
+  const f = classify(name)
+  const v = verdict(f)
+  const note = v === 'skip' ? 'Your call — not in the plan' : v === 'limit' ? 'Your call — keep it small' : 'Added by you'
+  // sweets, fried and condiments at one unit; everything else at its usual portion
+  return pick({ label: name, food: f }, v === 'good' ? f.qty : 1, note)
+}
+
 export function mealTotals(p: MealPlan) {
   return {
     kcal: p.picks.reduce((s, x) => s + x.kcal, 0),

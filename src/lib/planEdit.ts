@@ -1,5 +1,5 @@
 import { addDays, todayISO, type Timings } from './date'
-import { planDay, proteinTopUp } from './foods'
+import { planDay, planItemFor, proteinTopUp } from './foods'
 import { MEAL_SHARE, targets } from './nutrition'
 import { currentKg, dayMenuFor, useStore } from './store'
 import { MEAL_LABEL, MEALS, type DayMenu, type DayPlan, type Diet, type MealChange, type MealKey, type MealPlan, type PlanItem, type Proposal } from './types'
@@ -95,6 +95,14 @@ export function swapPick(base: DayPlan, meal: MealKey, index: number, next: Plan
   const picks = old.picks.map((p, i) => (i === index ? { ...next, note: next.note ?? `Instead of ${out.item}` } : p))
   const skip = [{ item: out.item, reason: `Swapped for ${next.item}` }, ...old.skip.filter((x) => x.item.toLowerCase() !== next.item.toLowerCase())]
   return edited(base, { ...base.meals, [meal]: { ...old, picks, skip } }, `${out.item} → ${next.item}`)
+}
+
+/** Have something from "Leave on the counter" after all. */
+export function addFromCounter(base: DayPlan, meal: MealKey, index: number): DayPlan {
+  const old = base.meals[meal]
+  const item = planItemFor(old.skip[index].item)
+  const meals = { ...base.meals, [meal]: { ...old, picks: [...old.picks, item], skip: old.skip.filter((_, i) => i !== index) } }
+  return edited(base, meals, `added ${item.item}`)
 }
 
 const TOP_UP = (meal: MealKey) => `Extra protein, since you skipped ${MEAL_LABEL[meal].toLowerCase()}`

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { currentMeal, fmtTime, mealOver, todayISO } from '../lib/date'
 import { mealTotals, swapOptions } from '../lib/foods'
-import { skipMeal, swapPick, topUpAfter, unskipMeal } from '../lib/planEdit'
+import { addFromCounter, skipMeal, swapPick, topUpAfter, unskipMeal } from '../lib/planEdit'
 import { useStore, useTargets } from '../lib/store'
 import { MEAL_LABEL, MEALS, type DayPlan, type MealKey, type MealPlan, type PlanItem } from '../lib/types'
 import { useDayPlan } from '../lib/usePlan'
@@ -69,6 +69,7 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
       change(skipMeal(current, meal, top), top ? `${MEAL_LABEL[meal]} skipped · ${top.item.item} added to ${MEAL_LABEL[top.meal].toLowerCase()}` : `${MEAL_LABEL[meal]} skipped`)
     },
     unskip: (meal) => change(unskipMeal(current, meal), `${MEAL_LABEL[meal]} is back on the plan`),
+    add: (meal, i) => change(addFromCounter(current, meal, i), `${current.meals[meal].skip[i].item} added to your plate`),
   }
 
   return (
@@ -158,6 +159,7 @@ interface MealActions {
   topUp: (meal: MealKey) => { meal: MealKey; item: PlanItem } | null
   skip: (meal: MealKey, withTopUp: boolean) => void
   unskip: (meal: MealKey) => void
+  add: (meal: MealKey, skipIndex: number) => void
 }
 
 function MealCard({
@@ -333,11 +335,22 @@ function MealCard({
                 <ChevronDown size={14} className={cx('transition', showSkip && 'rotate-180')} />
               </button>
               {showSkip ? (
-                <ul className="mt-2 space-y-1.5">
+                <ul className="mt-2 space-y-1">
                   {plan.skip.map((s, i) => (
-                    <li key={i} className="flex gap-2 text-[13.5px]">
-                      <span className="text-ink-2 line-through decoration-skip/50">{s.item}</span>
-                      <span className="text-ink-3">— {s.reason}</span>
+                    <li key={`${i}-${s.item}`} className="flex items-start gap-3 text-[13.5px]">
+                      <span className="min-w-0 flex-1 py-1">
+                        <span className="text-ink-2 line-through decoration-skip/50">{s.item}</span>
+                        <span className="text-ink-3"> — {s.reason}</span>
+                      </span>
+                      {!logged.length && !plan.skipped && (
+                        <button
+                          onClick={() => actions.add(meal, i)}
+                          aria-label={`Add ${s.item} to my plate`}
+                          className="flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[12px] font-medium text-ink-2 transition hover:border-line-strong hover:text-ink"
+                        >
+                          <Plus size={12} /> Add
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

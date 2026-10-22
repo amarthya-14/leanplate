@@ -1,7 +1,8 @@
 import { ArrowRight, MessageCircle, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from '../components/Toast'
 import { Button, Card, cx, PageHeader, Pill } from '../components/ui'
-import { addDays, todayISO } from '../lib/date'
+import { addDays, fmtShort, todayISO } from '../lib/date'
 import { sugarStreak, useStore } from '../lib/store'
 import type { CravingOutcome } from '../lib/types'
 
@@ -91,19 +92,31 @@ export function Cravings({ go }: { go: (v: string, prompt?: string) => void }) {
             </div>
           </div>
           <div className="mt-5 grid grid-cols-14 gap-1" style={{ gridTemplateColumns: 'repeat(14, minmax(0, 1fr))' }}>
-            {days.map((d) => (
-              <div
-                key={d}
-                title={d}
-                className={cx(
-                  'aspect-square rounded-[4px]',
-                  d < profile.startDate ? 'bg-surface-2' : slips.includes(d) ? 'bg-skip/70' : d <= today ? 'bg-accent-text/75' : 'bg-surface-2',
-                )}
-              />
-            ))}
+            {days.map((d) => {
+              const editable = d >= profile.startDate && d <= today
+              const slipped = slips.includes(d)
+              return (
+                <button
+                  key={d}
+                  disabled={!editable}
+                  title={editable ? `${fmtShort(d)}: ${slipped ? 'had sugar — tap to clear' : 'no sugar — tap if you had some'}` : fmtShort(d)}
+                  aria-label={editable ? `${fmtShort(d)}, ${slipped ? 'had sugar' : 'no sugar'}. Tap to change.` : fmtShort(d)}
+                  onClick={() => {
+                    toggleSlip(d)
+                    toast(slipped ? `${fmtShort(d)} marked sugar-free` : `${fmtShort(d)} marked as a slip`, { label: 'Undo', run: () => toggleSlip(d) })
+                  }}
+                  className={cx(
+                    'aspect-square rounded-[4px] transition',
+                    editable && 'cursor-pointer hover:ring-2 hover:ring-ink-3/40',
+                    d === today && 'ring-1 ring-ink-3/50',
+                    d < profile.startDate ? 'bg-surface-2' : slipped ? 'bg-skip/70' : d <= today ? 'bg-accent-text/75' : 'bg-surface-2',
+                  )}
+                />
+              )
+            })}
           </div>
           <div className="mt-4 flex items-center justify-between gap-3">
-            <span className="text-[12px] text-ink-3">Last 4 weeks</span>
+            <span className="text-[12px] text-ink-3">Last 4 weeks · tap a day to fix it</span>
             <Button size="sm" variant="ghost" onClick={() => toggleSlip(today)}>
               {slippedToday ? (
                 <>
