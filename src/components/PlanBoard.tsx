@@ -2,6 +2,7 @@ import { ArrowLeftRight, Check, ChevronDown, Lightbulb, Plus, RefreshCw, Sparkle
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { currentMeal, fmtTime, mealOver, todayISO } from '../lib/date'
+import { absorbExtra, extraChips, type ExtraChip } from '../lib/extras'
 import { mealTotals, swapOptions } from '../lib/foods'
 import { addFromCounter, skipMeal, swapPick, topUpAfter, unskipMeal } from '../lib/planEdit'
 import { useStore, useTargets } from '../lib/store'
@@ -71,6 +72,20 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
     unskip: (meal) => change(unskipMeal(current, meal), `${MEAL_LABEL[meal]} is back on the plan`),
     skippedCount: () => MEALS.filter((m) => current.meals[m].skipped).length,
     add: (meal, i) => change(addFromCounter(current, meal, i), `${current.meals[meal].skip[i].item} added to your plate`),
+    extra: (meal, chip) => {
+      const wasSaved = !!useStore.getState().plans[key]
+      const id = useStore.getState().addLog({ date, meal, label: chip.label, kcal: chip.kcal, protein: chip.protein })
+      // Only today's plate can still change; a past day just gets the log.
+      const trimmed = isToday ? absorbExtra(current, meal, chip.kcal, new Set([...loggedMeals, meal])) : null
+      if (trimmed) savePlan(trimmed.plan)
+      toast(`${chip.label} logged · ${trimmed ? trimmed.changes[0] : 'one extra doesn’t move your trend'}`, {
+        label: 'Undo',
+        run: () => {
+          useStore.getState().removeLog(id)
+          if (trimmed) (wasSaved ? savePlan(current) : removePlan(key))
+        },
+      })
+    },
   }
 
   return (
@@ -161,6 +176,7 @@ interface MealActions {
   skip: (meal: MealKey, withTopUp: boolean) => void
   unskip: (meal: MealKey) => void
   add: (meal: MealKey, skipIndex: number) => void
+  extra: (meal: MealKey, chip: ExtraChip) => void
   skippedCount: () => number
 }
 
@@ -409,6 +425,22 @@ function MealCard({
               </div>
             </div>
           ) : (
+          <>
+          {logged.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[12.5px] text-ink-3">Had a bit extra?</span>
+              {extraChips(plan, meal).map((c) => (
+                <button
+                  key={c.label}
+                  onClick={() => actions.extra(meal, c)}
+                  className="flex cursor-pointer items-center gap-1 rounded-full border border-line px-2.5 py-1 text-[12px] font-medium text-ink-2 transition hover:border-line-strong hover:text-ink active:scale-95"
+                >
+                  {c.label}
+                  <span className="num font-normal text-ink-3">{c.kcal}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div className="num text-[13px] text-ink-3">
               {chosenK} kcal · {chosenP} g protein
@@ -433,6 +465,7 @@ function MealCard({
               )}
             </div>
           </div>
+          </>
           )}
         </div>
         </motion.div>
