@@ -1,7 +1,7 @@
 import { addDays, todayISO, type Timings } from './date'
 import { planDay, planItemFor, proteinTopUp } from './foods'
-import { MEAL_SHARE, targets } from './nutrition'
-import { currentKg, dayMenuFor, useStore } from './store'
+import { MEAL_SHARE } from './nutrition'
+import { adaptiveTargets, dayMenuFor, useStore } from './store'
 import { MEAL_LABEL, MEALS, type DayMenu, type DayPlan, type Diet, type MealChange, type MealKey, type MealPlan, type PlanItem, type Proposal } from './types'
 
 export function resolveDate(d: unknown): string {
@@ -172,7 +172,7 @@ export function currentPlanFor(date: string): { plan: DayPlan; key: string; timi
   const key = `${date}|${dm.sheet}`
   const cached = s.plans[key]
   if (cached) return { plan: cached, key, timings: dm.month.timings }
-  const t = targets(s.profile, currentKg(s.weights, s.profile))
+  const t = adaptiveTargets(s.profile, s.weights, s.logs)
   const p = planDay(dm.menu, t.kcal, s.profile.diet, date)
   return { plan: { date, sheet: dm.sheet, source: 'smart', createdAt: 0, ...p }, key, timings: dm.month.timings }
 }

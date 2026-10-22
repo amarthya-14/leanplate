@@ -69,6 +69,7 @@ export function PlanBoard({ date, onUploadClick }: { date: string; onUploadClick
       change(skipMeal(current, meal, top), top ? `${MEAL_LABEL[meal]} skipped · ${top.item.item} added to ${MEAL_LABEL[top.meal].toLowerCase()}` : `${MEAL_LABEL[meal]} skipped`)
     },
     unskip: (meal) => change(unskipMeal(current, meal), `${MEAL_LABEL[meal]} is back on the plan`),
+    skippedCount: () => MEALS.filter((m) => current.meals[m].skipped).length,
     add: (meal, i) => change(addFromCounter(current, meal, i), `${current.meals[meal].skip[i].item} added to your plate`),
   }
 
@@ -160,6 +161,7 @@ interface MealActions {
   skip: (meal: MealKey, withTopUp: boolean) => void
   unskip: (meal: MealKey) => void
   add: (meal: MealKey, skipIndex: number) => void
+  skippedCount: () => number
 }
 
 function MealCard({
@@ -196,6 +198,7 @@ function MealCard({
   const [swapping, setSwapping] = useState<number | null>(null)
   const [confirmSkip, setConfirmSkip] = useState(false)
   const topUp = confirmSkip ? actions.topUp(meal) : null
+  const skippedToday = actions.skippedCount()
   const totals = mealTotals(plan)
   const logged = useMemo(() => logs.filter((l) => l.date === date && l.meal === meal), [logs, date, meal])
   const loggedKcal = logged.reduce((s, l) => s + l.kcal, 0)
@@ -377,6 +380,11 @@ function MealCard({
             <div className="mt-4 rounded-xl border border-line px-4 py-3">
               <p className="text-[14px] text-ink-2">
                 {over ? `Missed ${MEAL_LABEL[meal].toLowerCase()}?` : `Skip ${MEAL_LABEL[meal].toLowerCase()} today?`}{' '}
+                {skippedToday >= 2 && (
+                  <span className="mb-2 block text-ink">
+                    That would be your third skipped meal today. Going this low often turns into big hunger later; a small plate usually works better.{' '}
+                  </span>
+                )}
                 {topUp ? (
                   <>
                     You can add <span className="font-medium text-ink">{topUp.item.item}</span> ({topUp.item.portion}, {topUp.item.protein} g protein) to{' '}

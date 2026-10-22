@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { daysBetween, fromISO, todayISO } from './date'
 import { DEFAULT_MODEL } from './gemini'
+import { estimateExpenditure } from './expenditure'
 import { targets } from './nutrition'
 import type {
   ChatMsg,
@@ -148,10 +149,19 @@ export function currentKg(weights: WeightEntry[], profile: Profile) {
   return weights.length ? weights[weights.length - 1].kg : profile.startKg
 }
 
+/** Targets from the learned daily burn when there's enough data, the formula otherwise. */
+export function adaptiveTargets(profile: Profile, weights: WeightEntry[], logs: LogEntry[]) {
+  const kg = currentKg(weights, profile)
+  const formula = targets(profile, kg)
+  const exp = estimateExpenditure(formula.formulaTdee, weights, logs)
+  return { ...targets(profile, kg, { tdee: exp.tdee, kgPerWeek: exp.kgPerWeek }), expenditure: exp }
+}
+
 export function useTargets() {
   const profile = useStore((s) => s.profile)
   const weights = useStore((s) => s.weights)
-  return useMemo(() => (profile ? targets(profile, currentKg(weights, profile)) : null), [profile, weights])
+  const logs = useStore((s) => s.logs)
+  return useMemo(() => (profile ? adaptiveTargets(profile, weights, logs) : null), [profile, weights, logs])
 }
 
 export function findMenu(menus: MonthMenu[], date: string) {

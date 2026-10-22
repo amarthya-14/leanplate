@@ -5,6 +5,7 @@ import { generate, profileBrief } from '../lib/gemini'
 import { useMemo, useState } from 'react'
 import { Bar, Button, Card, IconButton, NumberField, PageHeader, Spinner } from '../components/ui'
 import { addDays, daysBetween, fmtShort, fromISO, todayISO } from '../lib/date'
+import { weightTrend } from '../lib/expenditure'
 import { bmi, bmiBand } from '../lib/nutrition'
 import { currentKg, useStore, useTargets } from '../lib/store'
 
@@ -96,17 +97,34 @@ export function Progress() {
         <div className="grid grid-cols-2 gap-3">
           <Stat label="BMI" value={b.toFixed(1)} hint={bmiBand(b) + ' (Asian scale)'} />
           <Stat label="Daily target" value={t.kcal.toLocaleString('en-IN')} hint={`${t.deficit} kcal deficit`} />
-          <Stat label="Maintenance" value={t.tdee.toLocaleString('en-IN')} hint={`BMR ${t.bmr}`} />
+          <Stat
+            label="Your daily burn"
+            value={t.tdee.toLocaleString('en-IN')}
+            hint={t.expenditure.status === 'learning' ? 'Formula estimate · learning' : t.expenditure.status === 'adjusting' ? 'Learning from your data' : 'Learned from your data'}
+          />
           <Stat label="Protein" value={`${t.protein} g`} hint="per day" />
         </div>
       </div>
+
+      <Card className="mb-3 p-6">
+        <div className="eyebrow mb-2">How your target is set</div>
+        <p className="max-w-2xl text-[14.5px] leading-relaxed text-ink-2">
+          Your burn is {t.tdee.toLocaleString('en-IN')} kcal a day. {t.expenditure.note}
+          {t.expenditure.learned !== null && t.expenditure.learned !== t.formulaTdee && (
+            <> The formula alone said {t.formulaTdee.toLocaleString('en-IN')}; your data says {t.expenditure.learned.toLocaleString('en-IN')}.</>
+          )}{' '}
+          Your target is {t.kcal.toLocaleString('en-IN')} kcal, a {t.deficit.toLocaleString('en-IN')} kcal deficit.
+        </p>
+        {t.guard && <p className="mt-3 rounded-xl bg-[color-mix(in_oklab,var(--gold)_10%,transparent)] px-4 py-3 text-[14px] text-ink-2">{t.guard}</p>}
+        <p className="mt-3 text-[12.5px] text-ink-3">It learns most from fully logged days and regular morning weigh-ins. Days you didn't log are left out, not counted as zero.</p>
+      </Card>
 
       <WeeklyReview />
 
       <Card className="mb-3 p-6">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-[15px] font-semibold">Weight trend</h2>
-          <span className="text-[12px] text-ink-3">Line is the 7-entry average — daily numbers jump with water</span>
+          <span className="text-[12px] text-ink-3">Line is your smoothed trend — daily numbers jump with water</span>
         </div>
         <WeightChart weights={weights} goal={profile.goalKg} />
       </Card>
@@ -163,10 +181,8 @@ function WeightChart({ weights, goal }: { weights: { date: string; kg: number }[
   const max = Math.ceil(Math.max(...vals) + 1)
   const x = (d: string) => P.l + (daysBetween(first, d) / span) * (W - P.l - P.r)
   const y = (v: number) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b)
-  const avg = weights.map((_, i) => {
-    const s = weights.slice(Math.max(0, i - 6), i + 1)
-    return s.reduce((a, b) => a + b.kg, 0) / s.length
-  })
+  const trend = weightTrend(weights, weights[weights.length - 1].date)
+  const avg = weights.map((w) => trend.get(w.date) ?? w.kg)
   const path = avg.map((v, i) => `${i ? 'L' : 'M'}${x(weights[i].date).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   const ticks = Array.from({ length: 4 }, (_, i) => min + ((max - min) * i) / 3)
   return (

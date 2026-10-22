@@ -7,6 +7,7 @@ import { toast } from '../components/Toast'
 import { Button, Card, cx, IconButton, PageHeader } from '../components/ui'
 import { addDays, fmtLong, todayISO } from '../lib/date'
 import { COACH_TOOLS, coachSystem, profileBrief, streamEvents } from '../lib/gemini'
+import { calorieFloor } from '../lib/nutrition'
 import { applyPlanChange, currentPlanFor, planTotals, proposalFromCall, proposalNote } from '../lib/planEdit'
 import { currentKg, dayMenuFor, sugarStreak, useStore, useTargets } from '../lib/store'
 import { MEAL_LABEL, MEALS, type ChatMsg, type Proposal } from '../lib/types'
@@ -91,7 +92,17 @@ export function Coach({ go, initialPrompt, clearPrompt }: { go: (v: string) => v
       return
     }
     const prev = useStore.getState().plans[cur.key] ?? null
-    useStore.getState().savePlan(applyPlanChange(cur.plan, p))
+    const next = applyPlanChange(cur.plan, p)
+    const profile = useStore.getState().profile
+    const before = planTotals(cur.plan.meals).kcal
+    const after = planTotals(next.meals).kcal
+    // Enforced in code whatever the model says: no coach edit may push a day far below the safe minimum
+    if (profile && after < before && after < calorieFloor(profile.sex) * 0.8) {
+      toast(`That would leave about ${after} kcal for the day, too little to be safe, so the plate wasn't changed.`)
+      patchChat(m.at, { proposal: { ...p, status: 'dismissed' } })
+      return
+    }
+    useStore.getState().savePlan(next)
     patchChat(m.at, { proposal: { ...p, status: 'applied', prev, before: planTotals(cur.plan.meals) } })
     toast(p.date === today ? "Today's plate updated" : 'Plate updated')
   }
