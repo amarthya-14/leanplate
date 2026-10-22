@@ -10,6 +10,11 @@ export default async function handler(req, res) {
   const key = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY
   if (!url || !key) return res.status(500).json({ error: 'Supabase is not configured.' })
 
-  const r = await fetch(`${url}/rest/v1/user_state?select=user_id&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
-  return res.status(r.ok ? 200 : 502).json({ ok: r.ok, status: r.status })
+  try {
+    const r = await fetch(`${url}/rest/v1/user_state?select=user_id&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
+    return res.status(r.ok ? 200 : 502).json({ ok: r.ok, status: r.status })
+  } catch (e) {
+    // e.g. the project was paused or deleted and its address no longer resolves
+    return res.status(502).json({ ok: false, error: String(e?.cause?.code ?? e) })
+  }
 }
